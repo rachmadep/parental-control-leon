@@ -1,6 +1,7 @@
 package com.parentalcontrol.parent.ui
 
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
 import android.view.View
@@ -19,6 +20,7 @@ import androidx.fragment.app.commit
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.google.firebase.auth.FirebaseAuth
 import com.parentalcontrol.parent.R
 import com.parentalcontrol.parent.analysis.AppLockPolicy
 import com.parentalcontrol.parent.databinding.ActivityMainBinding
@@ -34,6 +36,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val viewModel: ParentViewModel by viewModels()
     private var biometricPromptShowing = false
+    private val auth = FirebaseAuth.getInstance()
+
+    // Sesi berakhir (keluar atau token dicabut) -> kembali ke layar login
+    private val authListener = FirebaseAuth.AuthStateListener { if (it.currentUser == null) goToLogin() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Terapkan opsi Dark Mode yang disimpan
@@ -43,6 +49,13 @@ class MainActivity : AppCompatActivity() {
         )
 
         super.onCreate(savedInstanceState)
+        // Database hanya bisa diakses akun keluarga: tanpa sesi, jangan sentuh ViewModel (listener Firebase)
+        if (auth.currentUser == null) {
+            goToLogin()
+            return
+        }
+        auth.addAuthStateListener(authListener)
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -70,13 +83,24 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (!::binding.isInitialized) return
         checkAppLock()
     }
 
     override fun onStop() {
         // Jangan perbarui saat sedang terkunci, agar keluar-masuk cepat tidak melewati kunci
-        if (!viewModel.appLocked) viewModel.appLastActiveAt = System.currentTimeMillis()
+        if (::binding.isInitialized && !viewModel.appLocked) viewModel.appLastActiveAt = System.currentTimeMillis()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        auth.removeAuthStateListener(authListener)
+        super.onDestroy()
+    }
+
+    private fun goToLogin() {
+        startActivity(Intent(this, LoginActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        finish()
     }
 
     fun selectTab(itemId: Int) {

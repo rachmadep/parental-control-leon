@@ -6,6 +6,9 @@
     <string name="title_setup">Setup Izin Tablet Anak</string>
     <string name="subtitle_setup">Aktifkan semua izin di bawah ini agar kontrol dari HP orang tua berfungsi maksimal.</string>
 
+    <string name="account_title">Akun Keluarga</string>
+    <string name="account_desc">Masuk dengan akun Firebase yang sama dengan HP orang tua. Wajib agar data tersinkron dengan aman.</string>
+
     <string name="perm_usage_title">1. Akses Penggunaan Aplikasi</string>
     <string name="perm_usage_desc">Untuk memantau durasi buka YouTube Kids dan aplikasi lainnya.</string>
 

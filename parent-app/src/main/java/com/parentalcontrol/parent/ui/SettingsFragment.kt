@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.firebase.auth.FirebaseAuth
 import com.parentalcontrol.parent.ParentApp
 import com.parentalcontrol.parent.R
 import com.parentalcontrol.parent.analysis.PinChange
@@ -66,6 +67,19 @@ class SettingsFragment : Fragment() {
         binding.tvSettingsVersion.text = "Versi aplikasi $versionName"
 
         binding.rowChangePin.setOnClickListener { showChangePinDialog() }
+
+        binding.tvAccountEmail.text = FirebaseAuth.getInstance().currentUser?.email ?: "-"
+        binding.btnSignOut.setOnClickListener {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Keluar dari akun?")
+                .setMessage("Anda harus masuk lagi untuk memantau dan mengontrol tablet Leon. Tablet tetap menegakkan batas waktu.")
+                .setPositiveButton("Keluar") { _, _ ->
+                    // MainActivity mengamati sesi dan otomatis kembali ke layar login
+                    FirebaseAuth.getInstance().signOut()
+                }
+                .setNegativeButton("Batal", null)
+                .show()
+        }
 
         viewModel.device.observe(viewLifecycleOwner) { renderDevice() }
         viewModel.bleConnected.observe(viewLifecycleOwner) { renderDevice() }

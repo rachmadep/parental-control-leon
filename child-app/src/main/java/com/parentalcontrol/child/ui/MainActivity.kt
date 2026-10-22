@@ -11,10 +11,15 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.parentalcontrol.child.R
 import com.parentalcontrol.child.databinding.ActivityMainBinding
 import com.parentalcontrol.child.manager.AppUsageManager
@@ -27,6 +32,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var usageManager: AppUsageManager
     private lateinit var controlManager: DeviceControlManager
+    private val auth = FirebaseAuth.getInstance()
 
     private val bluetoothPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -110,6 +116,9 @@ class MainActivity : AppCompatActivity() {
             requestLocationPermissions()
         }
 
+        // Akun keluarga (Firebase Auth). Sengaja tanpa tombol keluar agar anak tidak bisa memutus sesi.
+        binding.btnSignIn.setOnClickListener { signIn() }
+
         // Tombol Start/Stop Service
         binding.btnToggleService.setOnClickListener {
             if (areAllPermissionsGranted()) {
@@ -117,7 +126,7 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "Layanan Proteksi Leon Berhasil Dijalankan!", Toast.LENGTH_SHORT).show()
                 updatePermissionStatus()
             } else {
-                Toast.makeText(this, "Mohon lengkapi semua izin terlebih dahulu!", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Mohon lengkapi semua izin dan masuk ke akun keluarga terlebih dahulu!", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -169,12 +178,56 @@ class MainActivity : AppCompatActivity() {
     private fun isGranted(permission: String) =
         ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 
+    private fun signIn() {
+        val email = binding.etEmail.text.toString().trim()
+        val password = binding.etPassword.text.toString()
+        if (email.isEmpty() || password.isEmpty()) {
+            showLoginError("Isi email dan password.")
+            return
+        }
+
+        binding.tvLoginError.visibility = View.GONE
+        binding.btnSignIn.isEnabled = false
+        auth.signInWithEmailAndPassword(email, password)
+            .addOnSuccessListener {
+                binding.etPassword.text?.clear()
+                binding.btnSignIn.isEnabled = true
+                updatePermissionStatus()
+                Toast.makeText(this, "Berhasil masuk ke akun keluarga", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener { e ->
+                binding.btnSignIn.isEnabled = true
+                showLoginError(
+                    when (e) {
+                        is FirebaseAuthInvalidUserException -> "Akun tidak ditemukan atau dinonaktifkan."
+                        is FirebaseAuthInvalidCredentialsException -> "Email atau password salah."
+                        is FirebaseNetworkException -> "Tidak ada koneksi internet."
+                        else -> "Gagal masuk: ${e.message}"
+                    }
+                )
+            }
+    }
+
+    private fun showLoginError(message: String) {
+        binding.tvLoginError.text = message
+        binding.tvLoginError.visibility = View.VISIBLE
+    }
+
+    private fun updateAccountStatus(): Boolean {
+        val user = auth.currentUser
+        binding.llLoginForm.visibility = if (user == null) View.VISIBLE else View.GONE
+        binding.tvAccountStatus.visibility = if (user == null) View.GONE else View.VISIBLE
+        binding.tvAccountStatus.text = "Terhubung sebagai ${user?.email ?: ""} ✓"
+        return user != null
+    }
+
     private fun updatePermissionStatus() {
         val usageGranted = usageManager.isPermissionGranted()
         val adminGranted = controlManager.isDeviceAdminActive()
         val overlayGranted = controlManager.canDrawOverlays()
         val settingsGranted = controlManager.canWriteSettings()
         val btGranted = isBluetoothPermissionGranted()
+        val signedIn = updateAccountStatus()
 
         updateButtonState(binding.btnPermUsage, usageGranted)
         updateButtonState(binding.btnPermAdmin, adminGranted)
@@ -183,7 +236,7 @@ class MainActivity : AppCompatActivity() {
         updateButtonState(binding.btnPermBluetooth, btGranted)
         updateButtonState(binding.btnPermLocation, isLocationPermissionGranted())
 
-        val allGranted = usageGranted && adminGranted && overlayGranted && settingsGranted && btGranted
+        val allGranted = usageGranted && adminGranted && overlayGranted && settingsGranted && btGranted && signedIn
         if (allGranted) {
             binding.tvDeviceStatus.text = "Status Proteksi: Siap Aktif ✓"
             binding.tvDeviceStatus.setTextColor(ContextCompat.getColor(this, R.color.success))
@@ -210,7 +263,8 @@ class MainActivity : AppCompatActivity() {
                controlManager.isDeviceAdminActive() &&
                controlManager.canDrawOverlays() &&
                controlManager.canWriteSettings() &&
-               isBluetoothPermissionGranted()
+               isBluetoothPermissionGranted() &&
+               auth.currentUser != null
     }
 
     private fun isBluetoothPermissionGranted(): Boolean {

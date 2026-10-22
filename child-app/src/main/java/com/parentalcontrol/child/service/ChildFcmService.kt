@@ -15,6 +15,9 @@ class ChildFcmService : FirebaseMessagingService() {
         Log.i(tag, "FCM Token baru tablet Leon: $token")
         
         // Langsung update ke Firebase agar tidak perlu startService yang bisa crash jika izin belum lengkap
+        // Database dilindungi aturan auth: tanpa akun masuk penulisan pasti ditolak
+        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) return
+
         val deviceId = "leon_tablet" // Hardcode agar sinkron dengan Parent App
         com.google.firebase.database.FirebaseDatabase.getInstance()
             .getReference("devices").child(deviceId).child("fcmToken").setValue(token)

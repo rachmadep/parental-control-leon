@@ -9,6 +9,7 @@ import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.DataSnapshot
@@ -70,6 +71,13 @@ class ChildMonitoringService : Service() {
     private var settingsListener: ValueEventListener? = null
     private var pinListener: ValueEventListener? = null
 
+    // Listener Firebase baru dipasang setelah akun keluarga masuk (database dilindungi aturan auth)
+    private val auth = FirebaseAuth.getInstance()
+    private val retryPending = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        if (firebaseAuth.currentUser != null) startFirebaseSession() else stopFirebaseSession()
+    }
+
     override fun onCreate() {
         super.onCreate()
         appUsageManager = AppUsageManager(this)
@@ -96,10 +104,45 @@ class ChildMonitoringService : Service() {
             Log.e(tag, "Gagal init BLE server", e)
         }
         startPeriodicSync()
+        startEnforcementLoop() // memakai config cache lokal, jalan walau belum masuk / offline
+        auth.addAuthStateListener(authListener) // memanggil startFirebaseSession() saat sudah masuk
+    }
+
+    private fun startFirebaseSession() {
+        stopFirebaseSession()
         listenForCommands()
         listenForLimitsConfig()
         listenForSettingsAndPin()
-        startEnforcementLoop()
+        serviceScope.launch { syncUsageStatsToFirebase() }
+    }
+
+    private fun stopFirebaseSession() {
+        val deviceRef = database.getReference("devices").child(deviceId)
+        commandListener?.let { deviceRef.child("pendingCommand").removeEventListener(it) }
+        configListener?.let { deviceRef.child("config").removeEventListener(it) }
+        settingsListener?.let { deviceRef.child("settings").removeEventListener(it) }
+        pinListener?.let { deviceRef.child("pin").removeEventListener(it) }
+        commandListener = null
+        configListener = null
+        settingsListener = null
+        pinListener = null
+    }
+
+    /**
+     * Listener yang dibatalkan karena akses ditolak (mis. aturan baru baru diterapkan atau token
+     * belum siap) tidak dipasang ulang oleh SDK, jadi mulai ulang sesi setelah jeda.
+     */
+    private fun onListenerCancelled(name: String, error: DatabaseError) {
+        Log.e(tag, "Gagal mendengarkan $name: ${error.message}")
+        if (error.code == DatabaseError.PERMISSION_DENIED && auth.currentUser != null &&
+            retryPending.compareAndSet(false, true)
+        ) {
+            serviceScope.launch {
+                delay(RETRY_DELAY_MS)
+                retryPending.set(false)
+                if (auth.currentUser != null) startFirebaseSession()
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -109,7 +152,7 @@ class ChildMonitoringService : Service() {
             }
             ACTION_UPDATE_FCM_TOKEN -> {
                 val token = intent.getStringExtra("token")
-                if (token != null) {
+                if (token != null && auth.currentUser != null) {
                     database.getReference("devices").child(deviceId).child("fcmToken").setValue(token)
                 }
             }
@@ -194,7 +237,7 @@ class ChildMonitoringService : Service() {
             }
 
             override fun onCancelled(error: DatabaseError) {
-                Log.e(tag, "Gagal mendengarkan pendingCommand: ${error.message}")
+                onListenerCancelled("pendingCommand", error)
             }
         }
         commandRef.addValueEventListener(commandListener as ValueEventListener)
@@ -220,7 +263,7 @@ class ChildMonitoringService : Service() {
             }
 
             override fun onCancelled(error: DatabaseError) {
-                Log.e(tag, "Gagal mendengarkan config: ${error.message}")
+                onListenerCancelled("config", error)
             }
         }
         configRef.addValueEventListener(configListener as ValueEventListener)
@@ -248,7 +291,7 @@ class ChildMonitoringService : Service() {
             }
 
             override fun onCancelled(error: DatabaseError) {
-                Log.e(tag, "Gagal mendengarkan settings: ${error.message}")
+                onListenerCancelled("settings", error)
             }
         }
         deviceRef.child("settings").addValueEventListener(settingsListener as ValueEventListener)
@@ -261,7 +304,7 @@ class ChildMonitoringService : Service() {
             }
 
             override fun onCancelled(error: DatabaseError) {
-                Log.e(tag, "Gagal mendengarkan pin: ${error.message}")
+                onListenerCancelled("pin", error)
             }
         }
         deviceRef.child("pin").addValueEventListener(pinListener as ValueEventListener)
@@ -336,6 +379,8 @@ class ChildMonitoringService : Service() {
     }
 
     private fun syncUsageStatsToFirebase() {
+        // Tanpa akun masuk, penulisan ke database pasti ditolak aturan; lewati dan coba lagi nanti
+        if (auth.currentUser == null) return
         try {
             val appList = appUsageManager.getDailyUsageStats()
             val ytMinutes = appUsageManager.getYoutubeKidsUsageMinutes()
@@ -418,18 +463,8 @@ class ChildMonitoringService : Service() {
     override fun onDestroy() {
         serviceJob.cancel()
         bleServerManager?.stopServer()
-        commandListener?.let {
-            database.getReference("devices").child(deviceId).child("pendingCommand").removeEventListener(it)
-        }
-        configListener?.let {
-            database.getReference("devices").child(deviceId).child("config").removeEventListener(it)
-        }
-        settingsListener?.let {
-            database.getReference("devices").child(deviceId).child("settings").removeEventListener(it)
-        }
-        pinListener?.let {
-            database.getReference("devices").child(deviceId).child("pin").removeEventListener(it)
-        }
+        auth.removeAuthStateListener(authListener)
+        stopFirebaseSession()
         locationReporter.stop()
         super.onDestroy()
     }
@@ -443,5 +478,6 @@ class ChildMonitoringService : Service() {
         private const val SYNC_INTERVAL_MS = 60_000L // Sinkronisasi berkala setiap 1 menit
         private const val ENFORCE_INTERVAL_MS = 15_000L // Cek batas waktu tiap 15 detik
         private const val HISTORY_RETENTION_DAYS = 35
+        private const val RETRY_DELAY_MS = 30_000L
     }
 }

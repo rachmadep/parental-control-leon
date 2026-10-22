@@ -24,6 +24,30 @@ class AppCategoryClassifierTest {
     }
 
     @Test
+    fun `messaging apps are other even though android calls them social`() {
+        val androidSocial = 4
+        assertEquals(AppCategory.OTHER, AppCategoryClassifier.classify("com.whatsapp", androidSocial))
+        assertEquals(AppCategory.OTHER, AppCategoryClassifier.classify("com.whatsapp.w4b", androidSocial))
+        assertEquals(AppCategory.OTHER, AppCategoryClassifier.classify("org.telegram.messenger", androidSocial))
+        assertEquals(AppCategory.OTHER, AppCategoryClassifier.classify("com.facebook.orca", androidSocial))
+        assertEquals(AppCategory.OTHER, AppCategoryClassifier.classify("com.google.android.apps.messaging", androidSocial))
+    }
+
+    @Test
+    fun `feed based social media stays entertainment`() {
+        val androidSocial = 4
+        assertEquals(AppCategory.ENTERTAINMENT, AppCategoryClassifier.classify("com.instagram.android", androidSocial))
+        assertEquals(AppCategory.ENTERTAINMENT, AppCategoryClassifier.classify("com.facebook.katana", androidSocial))
+        assertEquals(AppCategory.ENTERTAINMENT, AppCategoryClassifier.classify("com.zhiliaoapp.musically", -1))
+        assertEquals(AppCategory.ENTERTAINMENT, AppCategoryClassifier.classify("com.snapchat.android", androidSocial))
+    }
+
+    @Test
+    fun `unknown social app falls back to entertainment`() {
+        assertEquals(AppCategory.ENTERTAINMENT, AppCategoryClassifier.classify("com.some.newsocial", 4))
+    }
+
+    @Test
     fun `puzzle packages are games`() {
         assertEquals(AppCategory.GAME, AppCategoryClassifier.classify("com.studio.puzzlematch", -1))
     }

@@ -104,6 +104,11 @@ Besides `config`, the parent writes two more nodes that the child caches in Shar
 
 The UI follows a Google Stitch redesign ("Parental Control App Redesign"); colors were estimated from screenshots, not exported design tokens.
 
-## Firebase
+## Firebase security
 
-The README's suggested RTDB rules (`devices/$deviceId` open read/write) are a development setup with no auth; commands are unauthenticated. Treat any change touching the command path with that in mind.
+Access is meant to be limited to one shared **Firebase Auth email/password "family account"** that both apps sign in with; `database.rules.json` (placeholder `GANTI_DENGAN_UID_AKUN_KELUARGA`, replaced with the account's UID and published manually in the console — nothing deploys it) only allows `devices/leon_tablet` for that UID. The repo can't enforce this: until the owner publishes the rules, the database keeps whatever rules it has (historically open read/write).
+
+- Parent: `MainActivity` redirects to `LoginActivity` when `FirebaseAuth.currentUser == null` *before touching `ParentViewModel`* (that is what starts the Firebase listeners), and an `AuthStateListener` sends it back to login if the session ends. Sign-out lives in the Settings tab.
+- Child: the settings checklist has a required "Akun Keluarga" sign-in card (deliberately no sign-out button, the child can open this app). `ChildMonitoringService` registers an `AuthStateListener` and only attaches its Firebase listeners in `startFirebaseSession()` once signed in; a listener cancelled with `PERMISSION_DENIED` (e.g. rules just changed) restarts the session after 30 s, because the SDK does not re-attach cancelled listeners. All child writes (`syncUsageStatsToFirebase`, `AlertWriter`, FCM token) are skipped when signed out. Enforcement (`LimitEnforcer`) deliberately does not depend on auth: it runs from the locally cached config.
+- Both modules depend on `firebase-auth-ktx`; the Email/Password provider must be enabled in the Firebase console.
+- Residual risk: both apps share one account, so anyone who can read the child's app data (root/ADB) holds a valid session, and a 4-digit PIN hash is brute-forceable by any account holder.

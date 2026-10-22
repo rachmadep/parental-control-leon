@@ -1,5 +1,6 @@
 package com.parentalcontrol.child.manager
 
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import java.util.UUID
 
@@ -14,6 +15,9 @@ object AlertWriter {
 
     @Synchronized
     fun send(deviceId: String, type: String, message: String) {
+        // Database dilindungi aturan auth: tanpa akun masuk penulisan pasti ditolak
+        if (FirebaseAuth.getInstance().currentUser == null) return
+
         val now = System.currentTimeMillis()
         // Cegah spam: jenis peringatan yang sama tidak dikirim ulang dalam 5 menit
         if (now - (lastSentAt[type] ?: 0L) < MIN_REPEAT_INTERVAL_MS) return

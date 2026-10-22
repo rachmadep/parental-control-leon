@@ -1,0 +1,12 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "devices": {
+      "leon_tablet": {
+        ".read": "auth != null && auth.uid === 'GANTI_DENGAN_UID_AKUN_KELUARGA'",
+        ".write": "auth != null && auth.uid === 'GANTI_DENGAN_UID_AKUN_KELUARGA'"
+      }
+    }
+  }
+}
