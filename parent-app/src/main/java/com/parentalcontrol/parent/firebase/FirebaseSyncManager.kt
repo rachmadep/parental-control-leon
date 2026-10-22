@@ -200,7 +200,9 @@ class FirebaseSyncManager(
             totalScreenTimeMinutes = totalScreenTime,
             youtubeKidsMinutes = summarySnap.child("youtubeKidsMinutes").getValue(Long::class.java) ?: 0L,
             limitUsedMinutes = summarySnap.child("limitUsedMinutes").getValue(Long::class.java) ?: totalScreenTime,
-            isLocked = summarySnap.child("isLocked").getValue(Boolean::class.java) ?: false,
+            // Firebase menyimpan properti Kotlin `isLocked` sebagai "locked" (awalan "is" dibuang)
+            isLocked = summarySnap.child("locked").getValue(Boolean::class.java)
+                ?: summarySnap.child("isLocked").getValue(Boolean::class.java) ?: false,
             currentVolumePercent = summarySnap.child("currentVolumePercent").getValue(Int::class.java) ?: 50,
             currentBrightnessPercent = summarySnap.child("currentBrightnessPercent").getValue(Int::class.java) ?: 60,
             appList = appList.sortedByDescending { it.durationMinutes },

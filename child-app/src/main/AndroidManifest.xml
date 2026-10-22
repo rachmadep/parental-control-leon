@@ -36,6 +36,18 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
+    <!--
+        Android 11+ menyembunyikan aplikasi lain dari kita. Tanpa ini getLaunchIntentForPackage()
+        dan getApplicationInfo() gagal untuk YouTube Kids dkk, sehingga semuanya tersaring dari
+        daftar pemakaian. Query launcher cukup (tanpa QUERY_ALL_PACKAGES).
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name=".ChildApp"
         android:allowBackup="true"
