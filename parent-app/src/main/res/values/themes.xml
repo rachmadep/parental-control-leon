@@ -4,5 +4,8 @@
         <item name="colorPrimaryDark">@color/primary_dark</item>
         <item name="colorAccent">@color/accent</item>
         <item name="android:windowBackground">@color/background</item>
+        <!-- Tanpa ini status bar memakai colorPrimaryDark (biru). Warna ikon diatur di MainActivity. -->
+        <item name="android:statusBarColor">@color/background</item>
+        <item name="android:navigationBarColor">@color/card_bg</item>
     </style>
 </resources>
