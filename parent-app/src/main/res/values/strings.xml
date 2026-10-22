@@ -1,0 +1,25 @@
+<resources>
+    <string name="parent_app_name">Leon Parental (Parent)</string>
+    <string name="title_dashboard">Kontrol Tablet Leon</string>
+    <string name="subtitle_dashboard">Pantau aktivitas &amp; kontrol perangkat.</string>
+
+    <string name="card_status_title">Status Perangkat</string>
+    <string name="status_online">Online (Terhubung Cloud)</string>
+    <string name="status_offline">Offline (Tidak Ada Internet)</string>
+    <string name="btn_connect_ble">Hubungkan via Bluetooth (Offline)</string>
+    <string name="ble_connected">Terhubung via Bluetooth ✓</string>
+
+    <string name="card_yt_title">YouTube Kids Hari Ini</string>
+    <string name="yt_time_format">%1$d Jam %2$d Menit</string>
+    <string name="total_screen_time_format">%1$d Menit</string>
+
+    <string name="card_controls_title">Remote Kontrol Cepat</string>
+    <string name="btn_lock_now">Kunci Layar Sekarang</string>
+    <string name="btn_show_overlay">Tampilkan "Waktunya Istirahat"</string>
+    <string name="btn_unlock">Buka Kunci Layar</string>
+
+    <string name="label_volume">%1$d%%</string>
+    <string name="label_brightness">%1$d%%</string>
+
+    <string name="card_apps_title">Aplikasi Dibuka Hari Ini</string>
+</resources>
