@@ -5,6 +5,7 @@ data class AppUsageInfo(
     val appName: String,
     val totalTimeInForegroundMs: Long,
     val lastTimeUsed: Long,
+    val category: String = AppCategory.OTHER.key,
     val isYoutubeKids: Boolean = packageName == "com.google.android.apps.youtube.kids" ||
                                  packageName == "com.google.android.youtube" ||
                                  packageName.contains("youtube", ignoreCase = true)
@@ -22,5 +23,7 @@ data class DeviceUsageSummary(
     val isLocked: Boolean,
     val currentVolumePercent: Int,
     val currentBrightnessPercent: Int,
-    val appList: List<AppUsageInfo>
+    val appList: List<AppUsageInfo>,
+    val categories: Map<String, Long> = emptyMap(), // key AppCategory -> menit
+    val limitUsedMinutes: Long = 0L // menit yang dihitung ke batas harian (tanpa aplikasi child ini)
 )

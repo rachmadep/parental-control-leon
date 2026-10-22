@@ -18,7 +18,14 @@ import com.parentalcontrol.child.R
 import com.parentalcontrol.child.manager.AppUsageManager
 import com.parentalcontrol.child.manager.BleServerManager
 import com.parentalcontrol.child.manager.DeviceControlManager
+import com.parentalcontrol.child.manager.LimitEnforcer
+import com.parentalcontrol.child.manager.LimitsStore
+import com.parentalcontrol.child.manager.UsageSnapshot
+import com.parentalcontrol.child.model.AppCategory
+import com.parentalcontrol.child.model.AppUsageInfo
 import com.parentalcontrol.child.model.DeviceUsageSummary
+import com.parentalcontrol.child.model.LimitsConfig
+import com.parentalcontrol.child.ui.LockOverlayActivity
 import com.parentalcontrol.child.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,10 +51,19 @@ class ChildMonitoringService : Service() {
     private val database = FirebaseDatabase.getInstance()
     private var commandListener: ValueEventListener? = null
 
+    private lateinit var limitsStore: LimitsStore
+    @Volatile
+    private var limitsConfig = LimitsConfig()
+    private var configListener: ValueEventListener? = null
+    // true jika overlay yang sedang tampil dipicu penegakan batas (bukan perintah manual parent)
+    private var enforcementLockActive = false
+
     override fun onCreate() {
         super.onCreate()
         appUsageManager = AppUsageManager(this)
         deviceControlManager = DeviceControlManager(this)
+        limitsStore = LimitsStore(this)
+        limitsConfig = limitsStore.load()
 
         deviceId = "leon_tablet" // Hardcode agar identik dengan ParentApp
 
@@ -66,6 +82,8 @@ class ChildMonitoringService : Service() {
         }
         startPeriodicSync()
         listenForCommands()
+        listenForLimitsConfig()
+        startEnforcementLoop()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -166,6 +184,88 @@ class ChildMonitoringService : Service() {
         commandRef.addValueEventListener(commandListener as ValueEventListener)
     }
 
+    /**
+     * Konfigurasi batas waktu dari parent. Disimpan lokal supaya penegakan tetap jalan saat offline.
+     */
+    private fun listenForLimitsConfig() {
+        val configRef = database.getReference("devices").child(deviceId).child("config")
+        configListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val json = try {
+                    snapshot.getValue(String::class.java)
+                } catch (e: Exception) {
+                    Log.e(tag, "Format config tidak valid: ${e.message}")
+                    null
+                } ?: return
+
+                limitsStore.saveJson(json)
+                limitsConfig = limitsStore.load()
+                serviceScope.launch { enforceLimits() }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(tag, "Gagal mendengarkan config: ${error.message}")
+            }
+        }
+        configRef.addValueEventListener(configListener as ValueEventListener)
+    }
+
+    private fun startEnforcementLoop() {
+        serviceScope.launch {
+            while (isActive) {
+                enforceLimits()
+                delay(ENFORCE_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun enforceLimits() {
+        try {
+            val violation = if (limitsStore.isSnoozed()) {
+                null
+            } else {
+                LimitEnforcer.evaluate(limitsConfig, buildUsageSnapshot(), LimitEnforcer.currentClock())
+            }
+
+            if (violation != null) {
+                enforcementLockActive = true
+                if (!LockOverlayActivity.isShowing) {
+                    Log.i(tag, "Batas waktu tercapai: ${violation.reason}")
+                    deviceControlManager.showLockOverlay(violation.reason)
+                }
+            } else if (enforcementLockActive) {
+                // Penyebab kunci sudah hilang (bonus waktu, batas diubah, jam tidur selesai)
+                enforcementLockActive = false
+                deviceControlManager.hideLockOverlay(snooze = false)
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Gagal menegakkan batas waktu: ${e.message}")
+        }
+    }
+
+    private fun buildUsageSnapshot(): UsageSnapshot {
+        // Pemakaian aplikasi ini sendiri (termasuk overlay) tidak dihitung ke batas anak
+        val apps = appUsageManager.getDailyUsageStats().filter { it.packageName != packageName }
+        val foreground = appUsageManager.foregroundPackage
+        return UsageSnapshot(
+            totalMs = apps.sumOf { it.totalTimeInForegroundMs },
+            packageMs = apps.associate { it.packageName to it.totalTimeInForegroundMs },
+            categoryMs = apps.groupBy { it.category }
+                .mapValues { (_, list) -> list.sumOf { it.totalTimeInForegroundMs } },
+            foregroundPackage = foreground,
+            foregroundCategory = apps.firstOrNull { it.packageName == foreground }?.category
+        )
+    }
+
+    private fun categoryMinutes(appList: List<AppUsageInfo>): Map<String, Long> {
+        val result = AppCategory.values().associate { it.key to 0L }.toMutableMap()
+        for (app in appList) {
+            val minutes = Math.ceil(app.totalTimeInForegroundMs / 60000.0).toLong()
+            result[app.category] = (result[app.category] ?: 0L) + minutes
+        }
+        return result
+    }
+
     private fun startPeriodicSync() {
         serviceScope.launch {
             while (isActive) {
@@ -181,18 +281,23 @@ class ChildMonitoringService : Service() {
             val ytMinutes = appUsageManager.getYoutubeKidsUsageMinutes()
             val totalMinutes = appUsageManager.getTotalScreenTimeMinutes()
 
+            val categories = categoryMinutes(appList)
             val summary = DeviceUsageSummary(
                 deviceId = deviceId,
                 totalScreenTimeMinutes = totalMinutes,
                 youtubeKidsMinutes = ytMinutes,
-                isLocked = false,
+                isLocked = LockOverlayActivity.isShowing,
                 currentVolumePercent = deviceControlManager.getCurrentVolumePercent(),
                 currentBrightnessPercent = deviceControlManager.getCurrentBrightnessPercent(),
-                appList = appList
+                appList = appList,
+                categories = categories,
+                limitUsedMinutes = appList.filter { it.packageName != packageName }
+                    .sumOf { Math.ceil(it.totalTimeInForegroundMs / 60000.0).toLong() }
             )
 
             val deviceRef = database.getReference("devices").child(deviceId)
             deviceRef.child("summary").setValue(summary)
+            writeDailyHistory(deviceRef.child("history"), totalMinutes, ytMinutes, categories)
             deviceRef.child("lastHeartbeat").setValue(System.currentTimeMillis())
             deviceRef.child("isOnline").setValue(true)
             deviceRef.child("isOnline").onDisconnect().setValue(false)
@@ -201,6 +306,29 @@ class ChildMonitoringService : Service() {
         } catch (e: Exception) {
             Log.e(tag, "Gagal sinkronisasi data ke Firebase: ${e.message}")
         }
+    }
+
+    /**
+     * Simpan ringkasan harian ke `history/{yyyy-MM-dd}` (ditimpa tiap sinkronisasi) untuk layar Aktivitas
+     * di parent. Entri yang sudah lewat masa simpan dihapus satu per satu setiap hari.
+     */
+    private fun writeDailyHistory(
+        historyRef: com.google.firebase.database.DatabaseReference,
+        totalMinutes: Long,
+        ytMinutes: Long,
+        categories: Map<String, Long>
+    ) {
+        val today = LimitEnforcer.dateKey()
+        historyRef.child(today).setValue(
+            mapOf(
+                "date" to today,
+                "totalMinutes" to totalMinutes,
+                "youtubeKidsMinutes" to ytMinutes,
+                "categories" to categories,
+                "timestamp" to System.currentTimeMillis()
+            )
+        )
+        historyRef.child(LimitEnforcer.dateKey(-HISTORY_RETENTION_DAYS)).removeValue()
     }
 
     private fun buildForegroundNotification(): Notification {
@@ -227,6 +355,9 @@ class ChildMonitoringService : Service() {
         commandListener?.let {
             database.getReference("devices").child(deviceId).child("pendingCommand").removeEventListener(it)
         }
+        configListener?.let {
+            database.getReference("devices").child(deviceId).child("config").removeEventListener(it)
+        }
         super.onDestroy()
     }
 
@@ -237,5 +368,7 @@ class ChildMonitoringService : Service() {
         const val ACTION_SYNC_STATS_NOW = "com.parentalcontrol.child.SYNC_NOW"
         const val ACTION_UPDATE_FCM_TOKEN = "com.parentalcontrol.child.UPDATE_TOKEN"
         private const val SYNC_INTERVAL_MS = 60_000L // Sinkronisasi berkala setiap 1 menit
+        private const val ENFORCE_INTERVAL_MS = 15_000L // Cek batas waktu tiap 15 detik
+        private const val HISTORY_RETENTION_DAYS = 35
     }
 }

@@ -55,4 +55,6 @@ dependencies {
     implementation(libs.firebase.database.ktx)
 
     implementation(libs.gson)
+
+    testImplementation(libs.junit)
 }

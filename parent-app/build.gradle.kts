@@ -54,5 +54,8 @@ dependencies {
     implementation(libs.firebase.messaging.ktx)
     implementation(libs.firebase.database.ktx)
 
+    implementation(libs.androidx.fragment.ktx)
     implementation(libs.gson)
+
+    testImplementation(libs.junit)
 }

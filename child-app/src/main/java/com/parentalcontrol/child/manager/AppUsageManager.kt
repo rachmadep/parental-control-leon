@@ -7,6 +7,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Process
+import com.parentalcontrol.child.model.AppCategoryClassifier
 import com.parentalcontrol.child.model.AppUsageInfo
 import java.util.Calendar
 
@@ -15,6 +16,11 @@ class AppUsageManager(private val context: Context) {
     private val usageStatsManager =
         context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
     private val packageManager: PackageManager = context.packageManager
+
+    /** Aplikasi yang sedang di depan menurut pemanggilan getDailyUsageStats() terakhir. */
+    @Volatile
+    var foregroundPackage: String? = null
+        private set
 
     fun isPermissionGranted(): Boolean {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
@@ -77,6 +83,8 @@ class AppUsageManager(private val context: Context) {
             }
         }
 
+        foregroundPackage = foregroundStartTimes.maxByOrNull { it.value }?.key
+
         // Jika ada aplikasi yang saat ini sedang aktif terbuka (belum dipause)
         for ((pkg, fgStartTime) in foregroundStartTimes) {
             val activeMs = (endTime - fgStartTime).coerceAtLeast(0L)
@@ -96,7 +104,8 @@ class AppUsageManager(private val context: Context) {
                         packageName = pkgName,
                         appName = appName,
                         totalTimeInForegroundMs = totalTimeMs,
-                        lastTimeUsed = lastUsed
+                        lastTimeUsed = lastUsed,
+                        category = getCategory(pkgName)
                     )
                 )
             }
@@ -119,6 +128,15 @@ class AppUsageManager(private val context: Context) {
 
     private fun isLaunchableApp(packageName: String): Boolean {
         return packageManager.getLaunchIntentForPackage(packageName) != null
+    }
+
+    private fun getCategory(packageName: String): String {
+        val androidCategory = try {
+            packageManager.getApplicationInfo(packageName, 0).category
+        } catch (e: Exception) {
+            -1
+        }
+        return AppCategoryClassifier.classify(packageName, androidCategory).key
     }
 
     private fun getAppName(packageName: String): String {

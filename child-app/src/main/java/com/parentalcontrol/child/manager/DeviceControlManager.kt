@@ -57,17 +57,22 @@ class DeviceControlManager(private val context: Context) {
     /**
      * Tampilkan overlay layar penuh yang ramah anak ("Waktunya Istirahat, Leon!").
      */
-    fun showLockOverlay() {
+    fun showLockOverlay(reason: String? = null) {
         val intent = Intent(context, LockOverlayActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            reason?.let { putExtra(LockOverlayActivity.EXTRA_REASON, it) }
         }
         context.startActivity(intent)
     }
 
     /**
      * Menghilangkan overlay dengan mengirimkan broadcast.
+     *
+     * @param snooze true untuk pembukaan manual oleh orang tua: penegakan batas waktu dijeda
+     * [LimitsStore.SNOOZE_MINUTES] menit agar overlay tidak langsung muncul lagi.
      */
-    fun hideLockOverlay() {
+    fun hideLockOverlay(snooze: Boolean = true) {
+        if (snooze) LimitsStore(context).snoozeFor(LimitsStore.SNOOZE_MINUTES)
         val intent = Intent(LockOverlayActivity.ACTION_DISMISS_OVERLAY)
         intent.setPackage(context.packageName) // Agar dapat diterima oleh RECEIVER_NOT_EXPORTED
         context.sendBroadcast(intent)

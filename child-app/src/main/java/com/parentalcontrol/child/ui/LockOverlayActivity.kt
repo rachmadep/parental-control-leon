@@ -15,6 +15,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.parentalcontrol.child.ChildApp
 import com.parentalcontrol.child.databinding.ActivityLockOverlayBinding
+import com.parentalcontrol.child.manager.LimitsStore
 
 class LockOverlayActivity : AppCompatActivity() {
 
@@ -34,6 +35,9 @@ class LockOverlayActivity : AppCompatActivity() {
 
         binding = ActivityLockOverlayBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        isShowing = true
+
+        intent.getStringExtra(EXTRA_REASON)?.let { binding.tvLockMessage.text = it }
 
         // Cegah tombol back keluar dari overlay
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -85,6 +89,7 @@ class LockOverlayActivity : AppCompatActivity() {
                 val savedPin = sharedPrefs.getString(ChildApp.KEY_PARENT_PIN, ChildApp.DEFAULT_PIN)
 
                 if (enteredPin == savedPin) {
+                    LimitsStore(this).snoozeFor(LimitsStore.SNOOZE_MINUTES)
                     Toast.makeText(this, "Kunci berhasil dibuka", Toast.LENGTH_SHORT).show()
                     finish()
                 } else {
@@ -96,6 +101,7 @@ class LockOverlayActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        isShowing = false
         try {
             unregisterReceiver(dismissReceiver)
         } catch (e: Exception) {
@@ -106,5 +112,10 @@ class LockOverlayActivity : AppCompatActivity() {
 
     companion object {
         const val ACTION_DISMISS_OVERLAY = "com.parentalcontrol.child.DISMISS_OVERLAY"
+        const val EXTRA_REASON = "reason"
+
+        @Volatile
+        var isShowing = false
+            private set
     }
 }
