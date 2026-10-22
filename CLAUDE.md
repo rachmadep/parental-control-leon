@@ -21,8 +21,8 @@ Gradle wrapper, two modules (`:child-app`, `:parent-app`), compileSdk/targetSdk 
 ```
 
 ```bash
-./gradlew :child-app:testDebugUnitTest    # JVM unit tests (LimitEnforcer, category classifier)
-./gradlew :parent-app:testDebugUnitTest   # JVM unit tests (history analysis, schedule formatting)
+./gradlew :child-app:testDebugUnitTest    # JVM unit tests (LimitEnforcer, category classifier, PinHasher)
+./gradlew :parent-app:testDebugUnitTest   # JVM unit tests (history analysis, schedule formatting, PIN/alert/app-lock logic)
 ./gradlew :child-app:testDebugUnitTest --tests "com.parentalcontrol.child.manager.LimitEnforcerTest"  # one class
 ```
 
@@ -48,6 +48,10 @@ There is **no shared module**. The two apps communicate only through a Firebase 
 | History entry `history/{yyyy-MM-dd}` | `ChildMonitoringService.writeDailyHistory` | `FirebaseSyncManager.parseHistory`, `DayHistory` |
 | Limits config (one Gson JSON string at `config`) | `model/LimitsConfig.kt` | `model/LimitsConfig.kt` — identical data classes except defaults (parent defaults to the three standard `appLimits` rules, all "no limit") |
 | Category keys (`edukasi`/`hiburan`/`game`/`lainnya`) | `AppCategory` | `CategoryKeys` |
+| Device settings (one Gson JSON string at `settings`) | `model/DeviceSettings.kt` | `model/DeviceSettings.kt` |
+| PIN (`pin/{salt,hash}`, SHA-256 of `"salt:pin"`) | `manager/PinHasher.kt` | `analysis/SecurityLogic.kt` (`PinHasher`) — both tests assert the same known digest |
+| Alert (`lastAlert/{id,type,message,timestamp}`) and `AlertTypes` | `AlertWriter`, `model/DeviceSettings.kt` | `FirebaseSyncManager`, `model/DeviceSettings.kt` |
+| Location (`location/{lat,lng,accuracy,provider,timestamp}`) | `LocationReporter` | `FirebaseSyncManager` (`DeviceLocation`) |
 
 ### Two command channels
 
@@ -74,18 +78,27 @@ Parent edits a `LimitsConfig` (daily limit + per-day bonus minutes, per-app/cate
 - Everything defaults to disabled, so nothing locks until the parent turns it on.
 - Windows crossing midnight belong to the day they start on (`LimitEnforcer.isWindowActive`).
 
+### Settings, PIN, alerts, location (parent → child, and alerts back)
+
+Besides `config`, the parent writes two more nodes that the child caches in SharedPreferences (`SettingsStore`) so they apply offline: `settings` (`locationEnabled`, `uninstallProtection`) and `pin` (salt + hash). Removing `pin` returns the child to the default PIN. The parent verifies the *old* PIN locally against the same hash before writing a new one (`PinChange.validate`). A 4-digit PIN is brute-forceable by anyone who can read the database; hashing only keeps it from sitting in plaintext.
+
+- **Alerts:** the child writes a single `lastAlert` node (overwritten, so it never grows) when enforcement starts a lock (`LIMIT_REACHED`) and when Device Admin is disabled while `uninstallProtection` is on (`ADMIN_DISABLED`); `AlertWriter` suppresses the same type for 5 min. The parent turns it into a local notification (`AlertNotifier`) only if notifications are enabled, and only for alerts newer than the last one seen (`AlertTracker`; the first alert ever observed is just a baseline). There is no push server, so notifications only appear while the parent process is alive.
+- **"Proteksi Uninstall" does not block uninstalling.** Real blocking needs Device Owner (provisioned on a factory-reset device). Today it only warns the parent when the admin is disabled, and the child reports `deviceAdminActive` in the summary so the Settings tab can show it.
+- **Location:** `LocationReporter` (plain `LocationManager`, no Play Services) writes `location` about every 10 min while `locationEnabled`; `ChildMonitoringService` re-checks it on every sync so it starts once permission/location services become available. It needs `ACCESS_FINE_LOCATION` plus `ACCESS_BACKGROUND_LOCATION` (optional row 6 in the child's permission checklist; it is *not* required to start protection). The service's foreground type stays `connectedDevice` — don't add `location` to the manifest type without choosing the type at runtime, because `startForeground` throws when a declared type's permission isn't granted (the service catches that and stops itself).
+- The summary also carries `deviceModel`, `androidVersion`, `batteryPercent`, `deviceAdminActive` for the parent's profile card.
+
 ### Child-app specifics
 
 - `ChildMonitoringService` (START_STICKY foreground service) owns the BLE server, Firebase listener, and the periodic sync loop. `BootReceiver` restarts it on boot only if Bluetooth permissions are granted. `child-app/.../ui/MainActivity` is a permission checklist that starts the service.
 - Usage stats come from `UsageStatsManager` (`AppUsageManager`): daily window from 00:00, plus an `UsageEvents` pass to add the currently-foreground app's open session (also sets `foregroundPackage`, used by enforcement). Only launchable apps with ≥1 s usage are included. Minutes use `ceil`.
 - Each app gets a category from `AppCategoryClassifier` (package-name hints first, then `ApplicationInfo.category`); it is sent in `appList[].category` and aggregated into `summary.categories`.
 - YouTube detection differs by side: child's `AppUsageInfo.isYoutubeKids` matches any package containing "youtube" (so regular YouTube counts toward `youtubeKidsMinutes`), while parent's `AppUsageItem.isYoutubeKids` matches only the Kids package.
-- Lock behaviors: `LOCK_NOW` = `DevicePolicyManager.lockNow()` (needs Device Admin via `AdminReceiver`). The "rest" overlay is `LockOverlayActivity` (show-when-locked activity, back disabled, dismissed by an in-app broadcast `ACTION_DISMISS_OVERLAY` or the PIN dialog). The PIN is read from SharedPreferences with default `1234`; nothing in the code ever sets it, so it is effectively fixed.
+- Lock behaviors: `LOCK_NOW` = `DevicePolicyManager.lockNow()` (needs Device Admin via `AdminReceiver`). The "rest" overlay is `LockOverlayActivity` (show-when-locked activity, back disabled, dismissed by an in-app broadcast `ACTION_DISMISS_OVERLAY` or the PIN dialog). The PIN is verified by `SettingsStore.verifyPin`: against the salt+hash the parent wrote to `pin` (cached locally), falling back to the default `1234` when the parent never set one.
 - Brightness needs `WRITE_SETTINGS`; it clamps to ≥5% and forces manual mode. Wi-Fi toggling only works below Android 10 (`setWifiEnabled` returns false on API 29+).
 
 ### Parent-app specifics
 
-`MainActivity` is only a shell: bottom navigation over four fragments (Dashboard, Aktivitas, Batas Waktu, Pengaturan), all using ViewBinding. Firebase and BLE are owned by one activity-scoped `ParentViewModel` (so tab switches/rotation don't drop the BLE connection); fragments observe its LiveData (`device`, `history`, `config`, `bleConnected`) and call `dispatchCommand` / `saveConfig` / `grantBonus`. `BleClientManager` has a 12 s scan timeout and connects to the first device advertising the service UUID. Pure logic for the history/insights screens lives in `analysis/` (unit-tested); `BarChartView` is a small custom Canvas view, no chart library. Dark mode preference is kept in the `parent_prefs` SharedPreferences.
+`MainActivity` is only a shell: bottom navigation over four fragments (Dashboard, Aktivitas, Batas Waktu, Pengaturan), all using ViewBinding. Firebase and BLE are owned by one activity-scoped `ParentViewModel` (so tab switches/rotation don't drop the BLE connection); fragments observe its LiveData (`device`, `history`, `config`, `bleConnected`) and call `dispatchCommand` / `saveConfig` / `grantBonus`. `BleClientManager` has a 12 s scan timeout and connects to the first device advertising the service UUID. Pure logic for the history/insights screens lives in `analysis/` (unit-tested); `BarChartView` is a small custom Canvas view, no chart library. Local-only preferences (dark mode, notification opt-in, biometric lock, last seen alert) live in the `parent_prefs` SharedPreferences (`MainActivity.KEY_*`). The optional biometric app lock is a `lockCover` view in `activity_main.xml` driven by `MainActivity.checkAppLock` and `AppLockPolicy`; its locked/unlocked state lives in `ParentViewModel` so rotation can't bypass it.
 
 The UI follows a Google Stitch redesign ("Parental Control App Redesign"); colors were estimated from screenshots, not exported design tokens.
 

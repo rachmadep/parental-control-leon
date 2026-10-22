@@ -8,14 +8,22 @@ import com.google.firebase.database.ValueEventListener
 import com.google.gson.Gson
 import com.parentalcontrol.parent.model.AppUsageItem
 import com.parentalcontrol.parent.model.DayHistory
+import com.parentalcontrol.parent.model.DeviceAlert
+import com.parentalcontrol.parent.model.DeviceLocation
+import com.parentalcontrol.parent.model.DeviceSettings
 import com.parentalcontrol.parent.model.DeviceSummary
 import com.parentalcontrol.parent.model.LimitsConfig
+import com.parentalcontrol.parent.model.PinCredential
 
 class FirebaseSyncManager(
     private val deviceId: String,
     private val onDeviceUpdated: (summary: DeviceSummary, isOnline: Boolean) -> Unit,
     private val onHistoryUpdated: (List<DayHistory>) -> Unit = {},
-    private val onConfigUpdated: (LimitsConfig) -> Unit = {}
+    private val onConfigUpdated: (LimitsConfig) -> Unit = {},
+    private val onSettingsUpdated: (DeviceSettings) -> Unit = {},
+    private val onPinUpdated: (PinCredential?) -> Unit = {},
+    private val onLocationUpdated: (DeviceLocation?) -> Unit = {},
+    private val onAlert: (DeviceAlert) -> Unit = {}
 ) {
     private val database = FirebaseDatabase.getInstance()
     private val deviceRef = database.getReference("devices").child(deviceId)
@@ -27,11 +35,19 @@ class FirebaseSyncManager(
     private val onlineRef = deviceRef.child("isOnline")
     private val historyQuery = deviceRef.child("history").orderByKey().limitToLast(HISTORY_DAYS)
     private val configRef = deviceRef.child("config")
+    private val settingsRef = deviceRef.child("settings")
+    private val pinRef = deviceRef.child("pin")
+    private val locationRef = deviceRef.child("location")
+    private val alertRef = deviceRef.child("lastAlert")
 
     private var summaryListener: ValueEventListener? = null
     private var onlineListener: ValueEventListener? = null
     private var historyListener: ValueEventListener? = null
     private var configListener: ValueEventListener? = null
+    private var settingsListener: ValueEventListener? = null
+    private var pinListener: ValueEventListener? = null
+    private var locationListener: ValueEventListener? = null
+    private var alertListener: ValueEventListener? = null
 
     private var lastSummary = DeviceSummary(deviceId = deviceId)
     private var lastOnline = false
@@ -84,7 +100,78 @@ class FirebaseSyncManager(
             }
         }
 
+        settingsListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val settings = try {
+                    snapshot.getValue(String::class.java)?.let { gson.fromJson(it, DeviceSettings::class.java) }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Settings di Firebase tidak bisa dibaca: ${e.message}")
+                    null
+                }
+                onSettingsUpdated(settings ?: DeviceSettings())
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "Gagal mendengarkan settings: ${error.message}")
+            }
+        }
+        pinListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val salt = snapshot.child("salt").getValue(String::class.java)
+                val hash = snapshot.child("hash").getValue(String::class.java)
+                onPinUpdated(if (salt != null && hash != null) PinCredential(salt, hash) else null)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "Gagal mendengarkan pin: ${error.message}")
+            }
+        }
+        locationListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val lat = snapshot.child("lat").getValue(Double::class.java)
+                val lng = snapshot.child("lng").getValue(Double::class.java)
+                if (lat == null || lng == null) {
+                    onLocationUpdated(null)
+                    return
+                }
+                onLocationUpdated(
+                    DeviceLocation(
+                        lat = lat,
+                        lng = lng,
+                        accuracy = snapshot.child("accuracy").getValue(Double::class.java) ?: 0.0,
+                        provider = snapshot.child("provider").getValue(String::class.java) ?: "",
+                        timestamp = snapshot.child("timestamp").getValue(Long::class.java) ?: 0L
+                    )
+                )
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "Gagal mendengarkan location: ${error.message}")
+            }
+        }
+        alertListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (!snapshot.exists()) return
+                onAlert(
+                    DeviceAlert(
+                        id = snapshot.child("id").getValue(String::class.java) ?: "",
+                        type = snapshot.child("type").getValue(String::class.java) ?: "",
+                        message = snapshot.child("message").getValue(String::class.java) ?: "",
+                        timestamp = snapshot.child("timestamp").getValue(Long::class.java) ?: 0L
+                    )
+                )
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "Gagal mendengarkan lastAlert: ${error.message}")
+            }
+        }
+
         summaryRef.addValueEventListener(summaryListener as ValueEventListener)
+        settingsRef.addValueEventListener(settingsListener as ValueEventListener)
+        pinRef.addValueEventListener(pinListener as ValueEventListener)
+        locationRef.addValueEventListener(locationListener as ValueEventListener)
+        alertRef.addValueEventListener(alertListener as ValueEventListener)
         onlineRef.addValueEventListener(onlineListener as ValueEventListener)
         historyQuery.addValueEventListener(historyListener as ValueEventListener)
         configRef.addValueEventListener(configListener as ValueEventListener)
@@ -117,7 +204,11 @@ class FirebaseSyncManager(
             currentVolumePercent = summarySnap.child("currentVolumePercent").getValue(Int::class.java) ?: 50,
             currentBrightnessPercent = summarySnap.child("currentBrightnessPercent").getValue(Int::class.java) ?: 60,
             appList = appList.sortedByDescending { it.durationMinutes },
-            categories = parseMinutesMap(summarySnap.child("categories"))
+            categories = parseMinutesMap(summarySnap.child("categories")),
+            deviceModel = summarySnap.child("deviceModel").getValue(String::class.java) ?: "",
+            androidVersion = summarySnap.child("androidVersion").getValue(String::class.java) ?: "",
+            batteryPercent = summarySnap.child("batteryPercent").getValue(Int::class.java) ?: -1,
+            deviceAdminActive = summarySnap.child("deviceAdminActive").getValue(Boolean::class.java) ?: true
         )
     }
 
@@ -164,11 +255,37 @@ class FirebaseSyncManager(
             }
     }
 
+    fun saveSettings(settings: DeviceSettings, onResult: (Boolean, String?) -> Unit) {
+        settingsRef.setValue(gson.toJson(settings))
+            .addOnSuccessListener { onResult(true, null) }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Gagal menyimpan settings", e)
+                onResult(false, e.message)
+            }
+    }
+
+    fun savePin(credential: PinCredential, onResult: (Boolean, String?) -> Unit) {
+        pinRef.setValue(mapOf("salt" to credential.salt, "hash" to credential.hash))
+            .addOnSuccessListener { onResult(true, null) }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Gagal menyimpan PIN", e)
+                onResult(false, e.message)
+            }
+    }
+
     fun stopListening() {
         summaryListener?.let { summaryRef.removeEventListener(it) }
         onlineListener?.let { onlineRef.removeEventListener(it) }
         historyListener?.let { historyQuery.removeEventListener(it) }
         configListener?.let { configRef.removeEventListener(it) }
+        settingsListener?.let { settingsRef.removeEventListener(it) }
+        pinListener?.let { pinRef.removeEventListener(it) }
+        locationListener?.let { locationRef.removeEventListener(it) }
+        alertListener?.let { alertRef.removeEventListener(it) }
+        settingsListener = null
+        pinListener = null
+        locationListener = null
+        alertListener = null
         summaryListener = null
         onlineListener = null
         historyListener = null

@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.firebase.database.ktx)
 
     implementation(libs.androidx.fragment.ktx)
+    implementation(libs.androidx.biometric)
     implementation(libs.gson)
 
     testImplementation(libs.junit)

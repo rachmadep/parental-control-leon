@@ -25,5 +25,9 @@ data class DeviceUsageSummary(
     val currentBrightnessPercent: Int,
     val appList: List<AppUsageInfo>,
     val categories: Map<String, Long> = emptyMap(), // key AppCategory -> menit
-    val limitUsedMinutes: Long = 0L // menit yang dihitung ke batas harian (tanpa aplikasi child ini)
+    val limitUsedMinutes: Long = 0L, // menit yang dihitung ke batas harian (tanpa aplikasi child ini)
+    val deviceModel: String = "",
+    val androidVersion: String = "",
+    val batteryPercent: Int = -1, // -1 = tidak diketahui
+    val deviceAdminActive: Boolean = true
 )

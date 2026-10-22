@@ -21,7 +21,11 @@ data class DeviceSummary(
     val currentVolumePercent: Int = 50,
     val currentBrightnessPercent: Int = 60,
     val appList: List<AppUsageItem> = emptyList(),
-    val categories: Map<String, Long> = emptyMap() // key kategori -> menit
+    val categories: Map<String, Long> = emptyMap(), // key kategori -> menit
+    val deviceModel: String = "",
+    val androidVersion: String = "",
+    val batteryPercent: Int = -1, // -1 = tidak diketahui
+    val deviceAdminActive: Boolean = true // true untuk child lama yang belum melaporkan field ini
 )
 
 /** Ringkasan satu hari dari `devices/leon_tablet/history/{yyyy-MM-dd}`. */

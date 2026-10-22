@@ -21,6 +21,9 @@
     <string name="perm_bluetooth_title">5. Izin Bluetooth (BLE)</string>
     <string name="perm_bluetooth_desc">Sebagai jalur darurat saat Wi-Fi dimatikan.</string>
 
+    <string name="perm_location_title">6. Izin Lokasi (Opsional)</string>
+    <string name="perm_location_desc">Agar orang tua bisa melihat lokasi tablet. Pilih "Izinkan sepanjang waktu".</string>
+
     <string name="status_granted">Sudah Aktif ✓</string>
     <string name="status_need_action">Aktifkan Sekarang</string>
 

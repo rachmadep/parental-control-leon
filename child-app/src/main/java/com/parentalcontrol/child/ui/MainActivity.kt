@@ -34,6 +34,12 @@ class MainActivity : AppCompatActivity() {
         updatePermissionStatus()
     }
 
+    private val locationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        updatePermissionStatus()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -99,6 +105,11 @@ class MainActivity : AppCompatActivity() {
             requestBluetoothPermissions()
         }
 
+        // 6. Izin Lokasi (opsional, tidak menghalangi start service)
+        binding.btnPermLocation.setOnClickListener {
+            requestLocationPermissions()
+        }
+
         // Tombol Start/Stop Service
         binding.btnToggleService.setOnClickListener {
             if (areAllPermissionsGranted()) {
@@ -130,6 +141,34 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Dua langkah: lokasi akurat dulu, lalu "sepanjang waktu" (Android 10+). Pada Android 11+ langkah
+     * kedua membuka halaman pengaturan izin aplikasi.
+     */
+    private fun requestLocationPermissions() {
+        if (!isGranted(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            locationPermissionLauncher.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            !isGranted(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        ) {
+            locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
+        }
+    }
+
+    private fun isLocationPermissionGranted(): Boolean {
+        val fine = isGranted(Manifest.permission.ACCESS_FINE_LOCATION)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            fine && isGranted(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        } else {
+            fine
+        }
+    }
+
+    private fun isGranted(permission: String) =
+        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
     private fun updatePermissionStatus() {
         val usageGranted = usageManager.isPermissionGranted()
         val adminGranted = controlManager.isDeviceAdminActive()
@@ -142,6 +181,7 @@ class MainActivity : AppCompatActivity() {
         updateButtonState(binding.btnPermOverlay, overlayGranted)
         updateButtonState(binding.btnPermSettings, settingsGranted)
         updateButtonState(binding.btnPermBluetooth, btGranted)
+        updateButtonState(binding.btnPermLocation, isLocationPermissionGranted())
 
         val allGranted = usageGranted && adminGranted && overlayGranted && settingsGranted && btGranted
         if (allGranted) {

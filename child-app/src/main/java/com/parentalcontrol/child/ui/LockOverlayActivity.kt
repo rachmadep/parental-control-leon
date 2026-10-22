@@ -13,9 +13,9 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import com.parentalcontrol.child.ChildApp
 import com.parentalcontrol.child.databinding.ActivityLockOverlayBinding
 import com.parentalcontrol.child.manager.LimitsStore
+import com.parentalcontrol.child.manager.SettingsStore
 
 class LockOverlayActivity : AppCompatActivity() {
 
@@ -84,11 +84,7 @@ class LockOverlayActivity : AppCompatActivity() {
             .setMessage("Masukkan PIN orang tua untuk membuka kunci:")
             .setView(input)
             .setPositiveButton("Buka Kunci") { _, _ ->
-                val enteredPin = input.text.toString()
-                val sharedPrefs = getSharedPreferences(ChildApp.PREFS_NAME, Context.MODE_PRIVATE)
-                val savedPin = sharedPrefs.getString(ChildApp.KEY_PARENT_PIN, ChildApp.DEFAULT_PIN)
-
-                if (enteredPin == savedPin) {
+                if (SettingsStore(this).verifyPin(input.text.toString())) {
                     LimitsStore(this).snoozeFor(LimitsStore.SNOOZE_MINUTES)
                     Toast.makeText(this, "Kunci berhasil dibuka", Toast.LENGTH_SHORT).show()
                     finish()

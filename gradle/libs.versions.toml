@@ -12,6 +12,7 @@ googleServices = "4.4.2"
 gson = "2.10.1"
 junit = "4.13.2"
 fragment = "1.8.5"
+biometric = "1.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -27,6 +28,7 @@ firebase-messaging-ktx = { group = "com.google.firebase", name = "firebase-messa
 firebase-database-ktx = { group = "com.google.firebase", name = "firebase-database-ktx" }
 gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 androidx-fragment-ktx = { group = "androidx.fragment", name = "fragment-ktx", version.ref = "fragment" }
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

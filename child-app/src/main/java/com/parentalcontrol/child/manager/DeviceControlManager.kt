@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
+import android.os.BatteryManager
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.provider.Settings
@@ -39,6 +40,18 @@ class DeviceControlManager(private val context: Context) {
             true
         }
     }
+
+    // ========== DEVICE INFO ==========
+
+    fun getBatteryPercent(): Int {
+        val battery = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+        val percent = battery?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+        return if (percent in 0..100) percent else -1
+    }
+
+    fun getDeviceModel(): String = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
+
+    fun getAndroidVersion(): String = Build.VERSION.RELEASE ?: ""
 
     // ========== HARDWARE & SYSTEM CONTROLS ==========
 

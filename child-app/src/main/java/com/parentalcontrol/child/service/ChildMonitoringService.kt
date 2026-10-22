@@ -18,11 +18,16 @@ import com.parentalcontrol.child.R
 import com.parentalcontrol.child.manager.AppUsageManager
 import com.parentalcontrol.child.manager.BleServerManager
 import com.parentalcontrol.child.manager.DeviceControlManager
+import com.parentalcontrol.child.manager.AlertWriter
 import com.parentalcontrol.child.manager.LimitEnforcer
 import com.parentalcontrol.child.manager.LimitsStore
+import com.parentalcontrol.child.manager.LocationReporter
+import com.parentalcontrol.child.manager.SettingsStore
 import com.parentalcontrol.child.manager.UsageSnapshot
+import com.parentalcontrol.child.model.AlertTypes
 import com.parentalcontrol.child.model.AppCategory
 import com.parentalcontrol.child.model.AppUsageInfo
+import com.parentalcontrol.child.model.DeviceSettings
 import com.parentalcontrol.child.model.DeviceUsageSummary
 import com.parentalcontrol.child.model.LimitsConfig
 import com.parentalcontrol.child.ui.LockOverlayActivity
@@ -58,6 +63,13 @@ class ChildMonitoringService : Service() {
     // true jika overlay yang sedang tampil dipicu penegakan batas (bukan perintah manual parent)
     private var enforcementLockActive = false
 
+    private lateinit var settingsStore: SettingsStore
+    private lateinit var locationReporter: LocationReporter
+    @Volatile
+    private var deviceSettings = DeviceSettings()
+    private var settingsListener: ValueEventListener? = null
+    private var pinListener: ValueEventListener? = null
+
     override fun onCreate() {
         super.onCreate()
         appUsageManager = AppUsageManager(this)
@@ -66,6 +78,9 @@ class ChildMonitoringService : Service() {
         limitsConfig = limitsStore.load()
 
         deviceId = "leon_tablet" // Hardcode agar identik dengan ParentApp
+        settingsStore = SettingsStore(this)
+        deviceSettings = settingsStore.loadSettings()
+        locationReporter = LocationReporter(this, deviceId)
 
         try {
             startForeground(NOTIFICATION_ID, buildForegroundNotification())
@@ -83,6 +98,7 @@ class ChildMonitoringService : Service() {
         startPeriodicSync()
         listenForCommands()
         listenForLimitsConfig()
+        listenForSettingsAndPin()
         startEnforcementLoop()
     }
 
@@ -210,6 +226,47 @@ class ChildMonitoringService : Service() {
         configRef.addValueEventListener(configListener as ValueEventListener)
     }
 
+    /**
+     * `settings` (lokasi, proteksi uninstall) dan `pin` (salt + hash PIN orang tua) dari parent.
+     * Keduanya disimpan lokal agar tetap berlaku saat offline.
+     */
+    private fun listenForSettingsAndPin() {
+        val deviceRef = database.getReference("devices").child(deviceId)
+
+        settingsListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val json = try {
+                    snapshot.getValue(String::class.java)
+                } catch (e: Exception) {
+                    Log.e(tag, "Format settings tidak valid: ${e.message}")
+                    null
+                } ?: return
+
+                settingsStore.saveSettingsJson(json)
+                deviceSettings = settingsStore.loadSettings()
+                serviceScope.launch { locationReporter.sync(deviceSettings.locationEnabled) }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(tag, "Gagal mendengarkan settings: ${error.message}")
+            }
+        }
+        deviceRef.child("settings").addValueEventListener(settingsListener as ValueEventListener)
+
+        pinListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val salt = snapshot.child("salt").getValue(String::class.java)
+                val hash = snapshot.child("hash").getValue(String::class.java)
+                if (salt != null && hash != null) settingsStore.savePin(salt, hash) else settingsStore.clearPin()
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(tag, "Gagal mendengarkan pin: ${error.message}")
+            }
+        }
+        deviceRef.child("pin").addValueEventListener(pinListener as ValueEventListener)
+    }
+
     private fun startEnforcementLoop() {
         serviceScope.launch {
             while (isActive) {
@@ -228,6 +285,9 @@ class ChildMonitoringService : Service() {
             }
 
             if (violation != null) {
+                if (!enforcementLockActive) {
+                    AlertWriter.send(deviceId, AlertTypes.LIMIT_REACHED, violation.reason)
+                }
                 enforcementLockActive = true
                 if (!LockOverlayActivity.isShowing) {
                     Log.i(tag, "Batas waktu tercapai: ${violation.reason}")
@@ -292,8 +352,14 @@ class ChildMonitoringService : Service() {
                 appList = appList,
                 categories = categories,
                 limitUsedMinutes = appList.filter { it.packageName != packageName }
-                    .sumOf { Math.ceil(it.totalTimeInForegroundMs / 60000.0).toLong() }
+                    .sumOf { Math.ceil(it.totalTimeInForegroundMs / 60000.0).toLong() },
+                deviceModel = deviceControlManager.getDeviceModel(),
+                androidVersion = deviceControlManager.getAndroidVersion(),
+                batteryPercent = deviceControlManager.getBatteryPercent(),
+                deviceAdminActive = deviceControlManager.isDeviceAdminActive()
             )
+            // Cek ulang tiap sinkronisasi: izin lokasi/layanan lokasi bisa baru diaktifkan setelah service jalan
+            locationReporter.sync(deviceSettings.locationEnabled)
 
             val deviceRef = database.getReference("devices").child(deviceId)
             deviceRef.child("summary").setValue(summary)
@@ -358,6 +424,13 @@ class ChildMonitoringService : Service() {
         configListener?.let {
             database.getReference("devices").child(deviceId).child("config").removeEventListener(it)
         }
+        settingsListener?.let {
+            database.getReference("devices").child(deviceId).child("settings").removeEventListener(it)
+        }
+        pinListener?.let {
+            database.getReference("devices").child(deviceId).child("pin").removeEventListener(it)
+        }
+        locationReporter.stop()
         super.onDestroy()
     }
 
