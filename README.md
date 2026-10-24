@@ -65,7 +65,7 @@ Semua aturan **ditegakkan langsung di tablet** dan disimpan lokal, sehingga teta
 - **SafeSearch dan filter web belum tersedia.** Fitur itu butuh VPN lokal atau Accessibility Service.
 - **Keamanan Firebase.** Database hanya aman jika aturan di `database.rules.json` sudah Anda terapkan (lihat langkah setup). Tanpa itu, siapa pun yang tahu alamat database bisa membaca dan mengubah data. Kedua aplikasi berbagi **satu akun keluarga**, jadi yang memegang sesi di tablet (mis. lewat root/ADB) memegang akses penuh. PIN 4 digit yang di-hash tetap bisa ditebak oleh pemegang akun.
 - **Kontrol Wi-Fi** dari jarak jauh hanya berfungsi di Android 9 ke bawah.
-- **Jam tidur** memakai layar istirahat yang selalu menyala, sehingga baterai tablet terkuras jika aktif semalaman.
+- **Layar istirahat tidak menahan layar menyala.** Layar mengikuti timeout bawaan tablet dan mati sendiri; penegakan batas waktu tidak membangunkannya. Saat layar dinyalakan lagi, tablet langsung diperiksa dan layar istirahat muncul kembali bila batas masih berlaku. Jika anak menekan Home, layar istirahat dimunculkan lagi dalam hitungan detik.
 - Beberapa merek (mis. HONOR, Xiaomi) mematikan service latar belakang lewat optimasi baterai. Nonaktifkan optimasi baterai untuk aplikasi child di tablet.
 
 ---

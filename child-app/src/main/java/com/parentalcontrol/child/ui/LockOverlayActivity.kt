@@ -70,7 +70,8 @@ class LockOverlayActivity : AppCompatActivity() {
                 WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
         }
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Sengaja TIDAK memakai FLAG_KEEP_SCREEN_ON: layar mengikuti timeout bawaan tablet dan mati sendiri,
+        // jika tidak baterai terkuras habis semalaman. Overlay tetap ada di balik layar yang mati.
     }
 
     private fun showParentPinDialog() {
@@ -96,8 +97,19 @@ class LockOverlayActivity : AppCompatActivity() {
             .show()
     }
 
+    override fun onResume() {
+        super.onResume()
+        isVisible = true
+    }
+
+    override fun onPause() {
+        isVisible = false
+        super.onPause()
+    }
+
     override fun onDestroy() {
         isShowing = false
+        isVisible = false
         try {
             unregisterReceiver(dismissReceiver)
         } catch (e: Exception) {
@@ -110,8 +122,14 @@ class LockOverlayActivity : AppCompatActivity() {
         const val ACTION_DISMISS_OVERLAY = "com.parentalcontrol.child.DISMISS_OVERLAY"
         const val EXTRA_REASON = "reason"
 
+        /** Activity ada (termasuk di latar belakang atau saat layar mati). */
         @Volatile
         var isShowing = false
+            private set
+
+        /** Overlay sedang di depan dan terlihat; false jika anak menekan Home atau layar mati. */
+        @Volatile
+        var isVisible = false
             private set
     }
 }

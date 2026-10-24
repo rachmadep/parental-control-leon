@@ -21,6 +21,7 @@ import com.parentalcontrol.child.manager.BleServerManager
 import com.parentalcontrol.child.manager.DeviceControlManager
 import com.parentalcontrol.child.manager.AlertWriter
 import com.parentalcontrol.child.manager.LimitEnforcer
+import com.parentalcontrol.child.manager.LockOverlayPolicy
 import com.parentalcontrol.child.manager.LimitsStore
 import com.parentalcontrol.child.manager.LocationReporter
 import com.parentalcontrol.child.manager.SettingsStore
@@ -43,6 +44,11 @@ import kotlinx.coroutines.launch
 import android.widget.Toast
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 
 class ChildMonitoringService : Service() {
 
@@ -71,6 +77,19 @@ class ChildMonitoringService : Service() {
     private var deviceSettings = DeviceSettings()
     private var settingsListener: ValueEventListener? = null
     private var pinListener: ValueEventListener? = null
+
+    private val powerManager by lazy { getSystemService(Context.POWER_SERVICE) as PowerManager }
+
+    // Layar menyala lagi: periksa batas segera (tanpa menunggu siklus 15 detik) agar anak tidak
+    // sempat memakai tablet. Ditunda sebentar supaya overlay yang sudah di depan tidak dibuka dua kali.
+    private val screenOnReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            serviceScope.launch {
+                delay(SCREEN_ON_CHECK_DELAY_MS)
+                enforceLimits()
+            }
+        }
+    }
 
     // Listener Firebase baru dipasang setelah akun keluarga masuk (database dilindungi aturan auth)
     private val auth = FirebaseAuth.getInstance()
@@ -105,6 +124,9 @@ class ChildMonitoringService : Service() {
             Log.e(tag, "Gagal init BLE server", e)
         }
         startPeriodicSync()
+        ContextCompat.registerReceiver(
+            this, screenOnReceiver, IntentFilter(Intent.ACTION_SCREEN_ON), ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         startEnforcementLoop() // memakai config cache lokal, jalan walau belum masuk / offline
         auth.addAuthStateListener(authListener) // memanggil startFirebaseSession() saat sudah masuk
     }
@@ -321,6 +343,10 @@ class ChildMonitoringService : Service() {
     }
 
     private fun enforceLimits() {
+        // Layar mati: tidak ada yang perlu dihentikan dan overlay tidak boleh membangunkan layar
+        // (baterai). Dilanjutkan oleh screenOnReceiver begitu layar menyala.
+        if (!LockOverlayPolicy.shouldEvaluate(powerManager.isInteractive)) return
+
         try {
             val violation = if (limitsStore.isSnoozed()) {
                 null
@@ -333,7 +359,7 @@ class ChildMonitoringService : Service() {
                     AlertWriter.send(deviceId, AlertTypes.LIMIT_REACHED, violation.reason)
                 }
                 enforcementLockActive = true
-                if (!LockOverlayActivity.isShowing) {
+                if (LockOverlayPolicy.shouldLaunchOverlay(true, powerManager.isInteractive, LockOverlayActivity.isVisible)) {
                     Log.i(tag, "Batas waktu tercapai: ${violation.reason}")
                     deviceControlManager.showLockOverlay(violation.reason)
                 }
@@ -467,6 +493,11 @@ class ChildMonitoringService : Service() {
         serviceJob.cancel()
         bleServerManager?.stopServer()
         auth.removeAuthStateListener(authListener)
+        try {
+            unregisterReceiver(screenOnReceiver)
+        } catch (e: IllegalArgumentException) {
+            // belum sempat terdaftar (onCreate berhenti lebih awal)
+        }
         stopFirebaseSession()
         locationReporter.stop()
         super.onDestroy()
@@ -482,5 +513,6 @@ class ChildMonitoringService : Service() {
         private const val ENFORCE_INTERVAL_MS = 15_000L // Cek batas waktu tiap 15 detik
         private const val HISTORY_RETENTION_DAYS = 35
         private const val RETRY_DELAY_MS = 30_000L
+        private const val SCREEN_ON_CHECK_DELAY_MS = 1_000L
     }
 }
