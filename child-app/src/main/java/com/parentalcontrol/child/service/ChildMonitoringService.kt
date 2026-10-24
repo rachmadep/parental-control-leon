@@ -24,6 +24,7 @@ import com.parentalcontrol.child.manager.LimitEnforcer
 import com.parentalcontrol.child.manager.LimitsStore
 import com.parentalcontrol.child.manager.LocationReporter
 import com.parentalcontrol.child.manager.SettingsStore
+import com.parentalcontrol.child.manager.UsageSessionCalculator
 import com.parentalcontrol.child.manager.UsageSnapshot
 import com.parentalcontrol.child.model.AlertTypes
 import com.parentalcontrol.child.model.AppCategory
@@ -362,9 +363,8 @@ class ChildMonitoringService : Service() {
 
     private fun categoryMinutes(appList: List<AppUsageInfo>): Map<String, Long> {
         val result = AppCategory.values().associate { it.key to 0L }.toMutableMap()
-        for (app in appList) {
-            val minutes = Math.ceil(app.totalTimeInForegroundMs / 60000.0).toLong()
-            result[app.category] = (result[app.category] ?: 0L) + minutes
+        for ((category, apps) in appList.groupBy { it.category }) {
+            result[category] = UsageSessionCalculator.minutesCeil(apps.sumOf { it.totalTimeInForegroundMs })
         }
         return result
     }
@@ -383,8 +383,11 @@ class ChildMonitoringService : Service() {
         if (auth.currentUser == null) return
         try {
             val appList = appUsageManager.getDailyUsageStats()
-            val ytMinutes = appUsageManager.getYoutubeKidsUsageMinutes()
-            val totalMinutes = appUsageManager.getTotalScreenTimeMinutes()
+            // Dibulatkan dari total milidetik (bukan per aplikasi) agar puluhan aplikasi sekejap tidak membengkak
+            val ytMinutes = UsageSessionCalculator.minutesCeil(
+                appList.filter { it.isYoutubeKids }.sumOf { it.totalTimeInForegroundMs }
+            )
+            val totalMinutes = UsageSessionCalculator.minutesCeil(appList.sumOf { it.totalTimeInForegroundMs })
 
             val categories = categoryMinutes(appList)
             val summary = DeviceUsageSummary(
@@ -396,8 +399,8 @@ class ChildMonitoringService : Service() {
                 currentBrightnessPercent = deviceControlManager.getCurrentBrightnessPercent(),
                 appList = appList,
                 categories = categories,
-                limitUsedMinutes = appList.filter { it.packageName != packageName }
-                    .sumOf { Math.ceil(it.totalTimeInForegroundMs / 60000.0).toLong() },
+                // AppUsageManager sudah mengecualikan aplikasi ini, jadi sama dengan total
+                limitUsedMinutes = totalMinutes,
                 deviceModel = deviceControlManager.getDeviceModel(),
                 androidVersion = deviceControlManager.getAndroidVersion(),
                 batteryPercent = deviceControlManager.getBatteryPercent(),
