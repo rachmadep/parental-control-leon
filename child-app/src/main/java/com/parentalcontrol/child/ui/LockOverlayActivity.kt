@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.parentalcontrol.child.R
 import com.parentalcontrol.child.databinding.ActivityLockOverlayBinding
 import com.parentalcontrol.child.manager.LimitsStore
 import com.parentalcontrol.child.manager.SettingsStore
@@ -38,6 +39,9 @@ class LockOverlayActivity : AppCompatActivity() {
         isShowing = true
 
         intent.getStringExtra(EXTRA_REASON)?.let { binding.tvLockMessage.text = it }
+        SettingsStore(this).loadSettings().childName.trim().takeIf { it.isNotEmpty() }?.let {
+            binding.tvLockTitle.text = getString(R.string.lock_title_named, it)
+        }
 
         // Cegah tombol back keluar dari overlay
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {

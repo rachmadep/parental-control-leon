@@ -19,7 +19,7 @@ class ChildApp : Application() {
                 "Layanan Proteksi Parental Control",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Notifikasi sistem untuk menjaga proteksi tetap aktif di tablet Leon"
+                description = "Notifikasi sistem untuk menjaga proteksi tetap aktif di tablet anak"
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(channel)
@@ -30,6 +30,8 @@ class ChildApp : Application() {
         const val CHANNEL_ID = "parental_control_protection_channel"
         const val BLE_SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb"
         const val BLE_COMMAND_CHAR_UUID = "0000fff1-0000-1000-8000-00805f9b34fb"
+        // Kunci service data iklan BLE yang membawa penanda keluarga (lihat BleFamilyTag)
+        const val BLE_FAMILY_TAG_UUID = "0000fff2-0000-1000-8000-00805f9b34fb"
         const val PREFS_NAME = "parental_child_prefs"
         const val KEY_PARENT_PIN = "parent_pin"
         const val DEFAULT_PIN = "1234"

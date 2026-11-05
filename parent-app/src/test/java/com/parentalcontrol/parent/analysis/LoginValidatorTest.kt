@@ -28,6 +28,25 @@ class LoginValidatorTest {
     }
 
     @Test
+    fun `sign up requires matching confirmation`() {
+        assertNull(LoginValidator.validateSignUp("a@example.com", "rahasia123", "rahasia123"))
+        assertEquals("Konfirmasi password tidak cocok.", LoginValidator.validateSignUp("a@example.com", "rahasia123", "rahasia124"))
+    }
+
+    @Test
+    fun `sign up still applies the basic rules first`() {
+        assertEquals("Format email tidak valid.", LoginValidator.validateSignUp("keluarga", "rahasia123", "rahasia123"))
+        assertEquals("Password minimal 6 karakter.", LoginValidator.validateSignUp("a@example.com", "123", "123"))
+    }
+
+    @Test
+    fun `email only validation for password reset`() {
+        assertNull(LoginValidator.validateEmail("a@example.com"))
+        assertEquals("Isi email akun keluarga.", LoginValidator.validateEmail(" "))
+        assertEquals("Format email tidak valid.", LoginValidator.validateEmail("tanpa-at"))
+    }
+
+    @Test
     fun `password rules`() {
         assertEquals("Isi password.", LoginValidator.validate("a@example.com", ""))
         assertEquals("Password minimal 6 karakter.", LoginValidator.validate("a@example.com", "12345"))

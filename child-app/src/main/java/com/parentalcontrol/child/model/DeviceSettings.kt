@@ -1,10 +1,11 @@
 package com.parentalcontrol.child.model
 
 /**
- * Pengaturan perangkat dari ParentApp lewat `devices/leon_tablet/settings` (string JSON).
+ * Pengaturan perangkat dari ParentApp lewat `devices/{UID}/settings` (string JSON).
  * Kontrak ini diduplikasi di parent-app (model/DeviceSettings.kt) — ubah keduanya bersamaan.
  */
 data class DeviceSettings(
+    val childName: String = "", // nama anak untuk teks layar istirahat; kosong = teks generik
     val locationEnabled: Boolean = false,
     // Beri tahu orang tua jika Device Admin dimatikan. Tidak memblokir uninstall (itu butuh Device Owner).
     val uninstallProtection: Boolean = false

@@ -54,9 +54,6 @@ class MainActivity : AppCompatActivity() {
         usageManager = AppUsageManager(this)
         controlManager = DeviceControlManager(this)
 
-        val deviceId = "leon_tablet" // Hardcode agar identik dengan ParentApp
-        binding.tvDeviceId.text = "Device ID: $deviceId"
-
         setupClickListeners()
     }
 
@@ -78,7 +75,7 @@ class MainActivity : AppCompatActivity() {
                 putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
                 putExtra(
                     DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                    "Aktifkan agar HP Orang Tua dapat mengunci layar tablet Leon."
+                    "Aktifkan agar HP Orang Tua dapat mengunci layar tablet anak."
                 )
             }
             startActivity(intent)
@@ -123,7 +120,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnToggleService.setOnClickListener {
             if (areAllPermissionsGranted()) {
                 startMonitoringService()
-                Toast.makeText(this, "Layanan Proteksi Leon Berhasil Dijalankan!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Layanan Proteksi Berhasil Dijalankan!", Toast.LENGTH_SHORT).show()
                 updatePermissionStatus()
             } else {
                 Toast.makeText(this, "Mohon lengkapi semua izin dan masuk ke akun keluarga terlebih dahulu!", Toast.LENGTH_LONG).show()
@@ -218,6 +215,7 @@ class MainActivity : AppCompatActivity() {
         binding.llLoginForm.visibility = if (user == null) View.VISIBLE else View.GONE
         binding.tvAccountStatus.visibility = if (user == null) View.GONE else View.VISIBLE
         binding.tvAccountStatus.text = "Terhubung sebagai ${user?.email ?: ""} ✓"
+        binding.tvDeviceId.text = user?.email?.let { "Akun: $it" } ?: "Belum masuk akun keluarga"
         return user != null
     }
 

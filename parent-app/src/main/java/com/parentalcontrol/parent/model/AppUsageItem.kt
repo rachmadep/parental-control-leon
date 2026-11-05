@@ -28,7 +28,7 @@ data class DeviceSummary(
     val deviceAdminActive: Boolean = true // true untuk child lama yang belum melaporkan field ini
 )
 
-/** Ringkasan satu hari dari `devices/leon_tablet/history/{yyyy-MM-dd}`. */
+/** Ringkasan satu hari dari `devices/{UID}/history/{yyyy-MM-dd}`. */
 data class DayHistory(
     val date: String = "",
     val totalMinutes: Long = 0L,

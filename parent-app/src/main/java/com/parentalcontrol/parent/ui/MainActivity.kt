@@ -168,8 +168,8 @@ class MainActivity : AppCompatActivity() {
         )
         prompt.authenticate(
             BiometricPrompt.PromptInfo.Builder()
-                .setTitle("Buka Leon Parental")
-                .setSubtitle("Verifikasi untuk mengakses kontrol tablet Leon")
+                .setTitle("Buka Parental Control")
+                .setSubtitle("Verifikasi untuk mengakses kontrol tablet anak")
                 .setAllowedAuthenticators(authenticators)
                 .build()
         )

@@ -22,6 +22,7 @@ import java.util.UUID
 
 class BleClientManager(
     private val context: Context,
+    private val familyTag: ByteArray,
     private val onConnectionChanged: (isConnected: Boolean, statusText: String) -> Unit
 ) {
     private val tag = "BleClientManager"
@@ -50,13 +51,15 @@ class BleClientManager(
 
         if (isScanning) return
         isScanning = true
-        onConnectionChanged(false, "Sedang mencari tablet Leon via Bluetooth...")
+        onConnectionChanged(false, "Sedang mencari tablet anak via Bluetooth...")
 
         val scanner = bluetoothAdapter?.bluetoothLeScanner
         val serviceUuid = UUID.fromString(ParentApp.BLE_SERVICE_UUID)
 
+        // Hanya tablet dengan penanda keluarga yang sama: banyak pasangan bisa berdekatan tanpa salah sambung
         val filter = ScanFilter.Builder()
             .setServiceUuid(ParcelUuid(serviceUuid))
+            .setServiceData(ParcelUuid(UUID.fromString(ParentApp.BLE_FAMILY_TAG_UUID)), familyTag)
             .build()
 
         val settings = ScanSettings.Builder()
@@ -67,7 +70,7 @@ class BleClientManager(
             if (isScanning) {
                 stopScan()
                 if (!isConnected) {
-                    onConnectionChanged(false, "Tablet Leon tidak ditemukan di sekitar")
+                    onConnectionChanged(false, "Tablet Anak tidak ditemukan di sekitar")
                 }
             }
         }, 12000L) // Timeout scan 12 detik
@@ -102,7 +105,7 @@ class BleClientManager(
 
     @SuppressLint("MissingPermission")
     private fun connectToDevice(device: BluetoothDevice) {
-        onConnectionChanged(false, "Menghubungkan ke tablet Leon...")
+        onConnectionChanged(false, "Menghubungkan ke tablet anak...")
         bluetoothGatt = device.connectGatt(context, false, gattCallback)
     }
 
@@ -111,11 +114,11 @@ class BleClientManager(
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
             super.onConnectionStateChange(gatt, status, newState)
             if (newState == BluetoothGatt.STATE_CONNECTED) {
-                Log.i(tag, "Terhubung ke GATT tablet Leon, mencari service...")
+                Log.i(tag, "Terhubung ke GATT tablet anak, mencari service...")
                 mainHandler.post { onConnectionChanged(false, "Mencari layanan kontrol...") }
                 gatt?.discoverServices()
             } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
-                Log.w(tag, "Terputus dari Bluetooth tablet Leon")
+                Log.w(tag, "Terputus dari Bluetooth tablet anak")
                 bluetoothGatt?.close()
                 bluetoothGatt = null
                 commandCharacteristic = null

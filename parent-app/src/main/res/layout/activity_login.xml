@@ -17,10 +17,11 @@
         <ImageView
             android:layout_width="64dp"
             android:layout_height="64dp"
-            android:contentDescription="Leon Parental"
+            android:contentDescription="Parental Control"
             android:src="@mipmap/ic_launcher_round" />
 
         <TextView
+            android:id="@+id/tvTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
@@ -30,10 +31,11 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/tvSubtitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Gunakan akun yang sama dengan yang dipakai di tablet Leon."
+            android:text="Gunakan akun yang sama dengan yang dipakai di tablet anak."
             android:textColor="@color/text_secondary"
             android:textSize="13sp" />
 
@@ -64,6 +66,22 @@
                 android:inputType="textPassword" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilConfirm"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="Ulangi password"
+            android:visibility="gone"
+            app:endIconMode="password_toggle">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etConfirm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPassword" />
+        </com.google.android.material.textfield.TextInputLayout>
+
         <TextView
             android:id="@+id/tvError"
             android:layout_width="wrap_content"
@@ -81,11 +99,27 @@
             android:text="Masuk"
             app:cornerRadius="12dp" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnToggleMode"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Belum punya akun? Daftar" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnForgot"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Lupa password?" />
+
         <TextView
+            android:id="@+id/tvHint"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Akun dibuat sekali di Firebase Console (Authentication → Users). Lihat README untuk langkahnya."
+            android:layout_marginTop="12dp"
+            android:text="Satu akun dipakai bersama di HP orang tua dan tablet anak. Data tiap akun terpisah dan tidak bisa dilihat akun lain."
             android:textColor="@color/text_secondary"
             android:textSize="12sp" />
     </LinearLayout>

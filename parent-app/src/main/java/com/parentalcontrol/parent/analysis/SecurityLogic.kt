@@ -19,6 +19,16 @@ object PinHasher {
         MessageDigest.isEqual(hash(pin, salt).toByteArray(), expectedHash.toByteArray())
 }
 
+/**
+ * Penanda 4 byte keluarga untuk iklan BLE tablet (service data); HP hanya menyambung ke tablet yang
+ * penandanya cocok. Penyaring, bukan autentikasi. Diduplikasi di child-app (manager/BleFamilyTag.kt).
+ */
+object BleFamilyTag {
+
+    fun of(uid: String): ByteArray =
+        MessageDigest.getInstance("SHA-256").digest(uid.toByteArray(Charsets.UTF_8)).copyOf(4)
+}
+
 object PinChange {
 
     const val DEFAULT_PIN = "1234" // sama dengan ChildApp.DEFAULT_PIN

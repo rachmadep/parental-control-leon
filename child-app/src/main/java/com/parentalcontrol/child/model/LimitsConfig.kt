@@ -1,7 +1,7 @@
 package com.parentalcontrol.child.model
 
 /**
- * Konfigurasi batas waktu yang dikirim ParentApp lewat `devices/leon_tablet/config` (string JSON).
+ * Konfigurasi batas waktu yang dikirim ParentApp lewat `devices/{UID}/config` (string JSON).
  * Kontrak ini diduplikasi di parent-app (model/LimitsConfig.kt) — ubah keduanya bersamaan.
  */
 data class TimeWindow(

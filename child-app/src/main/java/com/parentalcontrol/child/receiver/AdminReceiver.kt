@@ -12,7 +12,7 @@ class AdminReceiver : DeviceAdminReceiver() {
 
     override fun onEnabled(context: Context, intent: Intent) {
         super.onEnabled(context, intent)
-        Toast.makeText(context, "Proteksi Device Admin Leon Aktif", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Proteksi Device Admin Aktif", Toast.LENGTH_SHORT).show()
     }
 
     override fun onDisableRequested(context: Context, intent: Intent): CharSequence? {
@@ -29,9 +29,8 @@ class AdminReceiver : DeviceAdminReceiver() {
 
         if (SettingsStore(context).loadSettings().uninstallProtection) {
             AlertWriter.send(
-                "leon_tablet", // Hardcode agar identik dengan ParentApp
                 AlertTypes.ADMIN_DISABLED,
-                "Proteksi Device Admin di tablet Leon dimatikan. Aplikasi sekarang bisa dihapus."
+                "Proteksi Device Admin di tablet anak dimatikan. Aplikasi sekarang bisa dihapus."
             )
         }
     }

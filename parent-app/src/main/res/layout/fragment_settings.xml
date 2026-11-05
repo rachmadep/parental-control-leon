@@ -21,7 +21,7 @@
             android:textSize="20sp"
             android:textStyle="bold" />
 
-        <!-- Profil perangkat Leon -->
+        <!-- Profil perangkat anak -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -39,9 +39,10 @@
                 android:padding="14dp">
 
                 <TextView
+                    android:id="@+id/tvProfileName"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Tablet Leon"
+                    android:text="Tablet Anak"
                     android:textColor="@color/text_primary"
                     android:textSize="16sp"
                     android:textStyle="bold" />
@@ -69,6 +70,15 @@
                     android:layout_marginTop="6dp"
                     android:textSize="13sp"
                     android:textStyle="bold" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnChildName"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Atur nama anak"
+                    app:cornerRadius="10dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

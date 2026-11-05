@@ -29,13 +29,13 @@ object LimitEnforcer {
 
     fun evaluate(config: LimitsConfig, usage: UsageSnapshot, clock: ClockState): Violation? {
         if (isWindowActive(config.bedtime, clock)) {
-            return Violation("Sudah waktunya tidur. Selamat istirahat, Leon!")
+            return Violation("Sudah waktunya tidur. Selamat istirahat!")
         }
 
         if (config.dailyLimitEnabled) {
             val limitMs = effectiveDailyLimitMinutes(config, clock.dateKey) * 60_000L
             if (usage.totalMs >= limitMs) {
-                return Violation("Waktu layar hari ini sudah habis. Sampai jumpa besok, Leon!")
+                return Violation("Waktu layar hari ini sudah habis. Sampai jumpa besok!")
             }
         }
 

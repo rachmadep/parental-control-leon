@@ -68,7 +68,7 @@ class DeviceControlManager(private val context: Context) {
     }
 
     /**
-     * Tampilkan overlay layar penuh yang ramah anak ("Waktunya Istirahat, Leon!").
+     * Tampilkan overlay layar penuh yang ramah anak ("Waktunya Istirahat!").
      */
     fun showLockOverlay(reason: String? = null) {
         val intent = Intent(context, LockOverlayActivity::class.java).apply {

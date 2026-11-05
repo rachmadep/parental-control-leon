@@ -10,6 +10,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.DataSnapshot
@@ -20,6 +21,7 @@ import com.parentalcontrol.child.manager.AppUsageManager
 import com.parentalcontrol.child.manager.BleServerManager
 import com.parentalcontrol.child.manager.DeviceControlManager
 import com.parentalcontrol.child.manager.AlertWriter
+import com.parentalcontrol.child.manager.BleFamilyTag
 import com.parentalcontrol.child.manager.LimitEnforcer
 import com.parentalcontrol.child.manager.LockOverlayPolicy
 import com.parentalcontrol.child.manager.LimitsStore
@@ -60,7 +62,9 @@ class ChildMonitoringService : Service() {
     private lateinit var deviceControlManager: DeviceControlManager
     private var bleServerManager: BleServerManager? = null
 
-    private lateinit var deviceId: String
+    // Data keluarga ini: devices/{UID akun}. Dipasang saat sesi Firebase dimulai (setelah akun masuk).
+    private var sessionRef: DatabaseReference? = null
+    private var bleUid: String? = null
     private val database = FirebaseDatabase.getInstance()
     private var commandListener: ValueEventListener? = null
 
@@ -95,7 +99,12 @@ class ChildMonitoringService : Service() {
     private val auth = FirebaseAuth.getInstance()
     private val retryPending = java.util.concurrent.atomic.AtomicBoolean(false)
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
-        if (firebaseAuth.currentUser != null) startFirebaseSession() else stopFirebaseSession()
+        if (firebaseAuth.currentUser != null) {
+            startFirebaseSession()
+        } else {
+            stopFirebaseSession()
+            stopBleServer()
+        }
     }
 
     override fun onCreate() {
@@ -105,10 +114,9 @@ class ChildMonitoringService : Service() {
         limitsStore = LimitsStore(this)
         limitsConfig = limitsStore.load()
 
-        deviceId = "leon_tablet" // Hardcode agar identik dengan ParentApp
         settingsStore = SettingsStore(this)
         deviceSettings = settingsStore.loadSettings()
-        locationReporter = LocationReporter(this, deviceId)
+        locationReporter = LocationReporter(this)
 
         try {
             startForeground(NOTIFICATION_ID, buildForegroundNotification())
@@ -117,12 +125,7 @@ class ChildMonitoringService : Service() {
             stopSelf()
             return
         }
-        
-        try {
-            initBleServer()
-        } catch (e: Exception) {
-            Log.e(tag, "Gagal init BLE server", e)
-        }
+
         startPeriodicSync()
         ContextCompat.registerReceiver(
             this, screenOnReceiver, IntentFilter(Intent.ACTION_SCREEN_ON), ContextCompat.RECEIVER_NOT_EXPORTED
@@ -132,19 +135,25 @@ class ChildMonitoringService : Service() {
     }
 
     private fun startFirebaseSession() {
+        val uid = auth.currentUser?.uid ?: return
         stopFirebaseSession()
-        listenForCommands()
-        listenForLimitsConfig()
-        listenForSettingsAndPin()
+
+        val ref = database.getReference("devices").child(uid)
+        sessionRef = ref
+        listenForCommands(ref)
+        listenForLimitsConfig(ref)
+        listenForSettingsAndPin(ref)
+        if (bleUid != uid) startBleServer(uid)
         serviceScope.launch { syncUsageStatsToFirebase() }
     }
 
     private fun stopFirebaseSession() {
-        val deviceRef = database.getReference("devices").child(deviceId)
+        val deviceRef = sessionRef ?: return
         commandListener?.let { deviceRef.child("pendingCommand").removeEventListener(it) }
         configListener?.let { deviceRef.child("config").removeEventListener(it) }
         settingsListener?.let { deviceRef.child("settings").removeEventListener(it) }
         pinListener?.let { deviceRef.child("pin").removeEventListener(it) }
+        sessionRef = null
         commandListener = null
         configListener = null
         settingsListener = null
@@ -175,19 +184,32 @@ class ChildMonitoringService : Service() {
             }
             ACTION_UPDATE_FCM_TOKEN -> {
                 val token = intent.getStringExtra("token")
-                if (token != null && auth.currentUser != null) {
-                    database.getReference("devices").child(deviceId).child("fcmToken").setValue(token)
+                if (token != null) {
+                    sessionRef?.child("fcmToken")?.setValue(token)
                 }
             }
         }
         return START_STICKY
     }
 
-    private fun initBleServer() {
-        bleServerManager = BleServerManager(this) { cmdCode, param ->
-            handleBleCommand(cmdCode, param)
+    /** Server BLE diiklankan dengan penanda keluarga (dari UID) agar hanya HP keluarga ini yang menyambung. */
+    private fun startBleServer(uid: String) {
+        try {
+            bleServerManager?.stopServer()
+            bleServerManager = BleServerManager(this, BleFamilyTag.of(uid)) { cmdCode, param ->
+                handleBleCommand(cmdCode, param)
+            }
+            bleServerManager?.startServer()
+            bleUid = uid
+        } catch (e: Exception) {
+            Log.e(tag, "Gagal init BLE server", e)
         }
-        bleServerManager?.startServer()
+    }
+
+    private fun stopBleServer() {
+        bleServerManager?.stopServer()
+        bleServerManager = null
+        bleUid = null
     }
 
     private fun handleBleCommand(cmdCode: Int, param: Int) {
@@ -217,8 +239,8 @@ class ChildMonitoringService : Service() {
         }
     }
 
-    private fun listenForCommands() {
-        val commandRef = database.getReference("devices").child(deviceId).child("pendingCommand")
+    private fun listenForCommands(ref: DatabaseReference) {
+        val commandRef = ref.child("pendingCommand")
         commandListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 if (!snapshot.exists()) return
@@ -269,8 +291,8 @@ class ChildMonitoringService : Service() {
     /**
      * Konfigurasi batas waktu dari parent. Disimpan lokal supaya penegakan tetap jalan saat offline.
      */
-    private fun listenForLimitsConfig() {
-        val configRef = database.getReference("devices").child(deviceId).child("config")
+    private fun listenForLimitsConfig(ref: DatabaseReference) {
+        val configRef = ref.child("config")
         configListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val json = try {
@@ -296,8 +318,8 @@ class ChildMonitoringService : Service() {
      * `settings` (lokasi, proteksi uninstall) dan `pin` (salt + hash PIN orang tua) dari parent.
      * Keduanya disimpan lokal agar tetap berlaku saat offline.
      */
-    private fun listenForSettingsAndPin() {
-        val deviceRef = database.getReference("devices").child(deviceId)
+    private fun listenForSettingsAndPin(ref: DatabaseReference) {
+        val deviceRef = ref
 
         settingsListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -356,7 +378,7 @@ class ChildMonitoringService : Service() {
 
             if (violation != null) {
                 if (!enforcementLockActive) {
-                    AlertWriter.send(deviceId, AlertTypes.LIMIT_REACHED, violation.reason)
+                    AlertWriter.send(AlertTypes.LIMIT_REACHED, violation.reason)
                 }
                 enforcementLockActive = true
                 if (LockOverlayPolicy.shouldLaunchOverlay(true, powerManager.isInteractive, LockOverlayActivity.isVisible)) {
@@ -406,7 +428,7 @@ class ChildMonitoringService : Service() {
 
     private fun syncUsageStatsToFirebase() {
         // Tanpa akun masuk, penulisan ke database pasti ditolak aturan; lewati dan coba lagi nanti
-        if (auth.currentUser == null) return
+        val uid = auth.currentUser?.uid ?: return
         try {
             val appList = appUsageManager.getDailyUsageStats()
             // Dibulatkan dari total milidetik (bukan per aplikasi) agar puluhan aplikasi sekejap tidak membengkak
@@ -417,7 +439,7 @@ class ChildMonitoringService : Service() {
 
             val categories = categoryMinutes(appList)
             val summary = DeviceUsageSummary(
-                deviceId = deviceId,
+                deviceId = uid,
                 totalScreenTimeMinutes = totalMinutes,
                 youtubeKidsMinutes = ytMinutes,
                 isLocked = LockOverlayActivity.isShowing,
@@ -435,7 +457,7 @@ class ChildMonitoringService : Service() {
             // Cek ulang tiap sinkronisasi: izin lokasi/layanan lokasi bisa baru diaktifkan setelah service jalan
             locationReporter.sync(deviceSettings.locationEnabled)
 
-            val deviceRef = database.getReference("devices").child(deviceId)
+            val deviceRef = database.getReference("devices").child(uid)
             deviceRef.child("summary").setValue(summary)
             writeDailyHistory(deviceRef.child("history"), totalMinutes, ytMinutes, categories)
             deviceRef.child("lastHeartbeat").setValue(System.currentTimeMillis())
@@ -480,7 +502,7 @@ class ChildMonitoringService : Service() {
         )
 
         return NotificationCompat.Builder(this, ChildApp.CHANNEL_ID)
-            .setContentTitle("Proteksi Leon Aktif")
+            .setContentTitle("Proteksi Aktif")
             .setContentText("Tablet sedang dipantau oleh Parental Control")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)

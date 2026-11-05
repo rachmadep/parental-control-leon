@@ -5,10 +5,11 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import com.parentalcontrol.parent.ParentApp
+import com.google.firebase.auth.FirebaseAuth
 import com.parentalcontrol.parent.R
 import com.parentalcontrol.parent.ble.BleClientManager
 import com.parentalcontrol.parent.analysis.AlertTracker
+import com.parentalcontrol.parent.analysis.BleFamilyTag
 import com.parentalcontrol.parent.analysis.PinChange
 import com.parentalcontrol.parent.analysis.PinHasher
 import com.parentalcontrol.parent.firebase.FirebaseSyncManager
@@ -65,8 +66,13 @@ class ParentViewModel(application: Application) : AndroidViewModel(application) 
     /** Pesan singkat untuk Toast; dikumpulkan oleh MainActivity. */
     val messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
 
+    // Data keluarga ini ada di devices/{UID akun}. MainActivity memastikan sudah masuk sebelum ViewModel dibuat.
+    private val familyUid: String = requireNotNull(FirebaseAuth.getInstance().currentUser?.uid) {
+        "ParentViewModel dibuat sebelum masuk ke akun keluarga"
+    }
+
     private val firebase = FirebaseSyncManager(
-        deviceId = ParentApp.TARGET_DEVICE_ID,
+        deviceId = familyUid,
         onDeviceUpdated = { summary, isOnline -> _device.postValue(DeviceState(summary, isOnline)) },
         onHistoryUpdated = { _history.postValue(it) },
         onConfigUpdated = { _config.postValue(it) },
@@ -76,10 +82,10 @@ class ParentViewModel(application: Application) : AndroidViewModel(application) 
         onAlert = { handleAlert(it) }
     )
 
-    private val ble = BleClientManager(application) { isConnected, statusText ->
+    private val ble = BleClientManager(application, BleFamilyTag.of(familyUid)) { isConnected, statusText ->
         _bleConnected.postValue(isConnected)
         _bleStatus.postValue(statusText)
-        if (isConnected) messages.tryEmit("Berhasil terhubung ke tablet Leon via Bluetooth!")
+        if (isConnected) messages.tryEmit("Berhasil terhubung ke tablet anak via Bluetooth!")
     }
 
     init {
@@ -126,6 +132,10 @@ class ParentViewModel(application: Application) : AndroidViewModel(application) 
         saveSettings((_settings.value ?: DeviceSettings()).copy(locationEnabled = enabled))
     }
 
+    fun setChildName(name: String) {
+        saveSettings((_settings.value ?: DeviceSettings()).copy(childName = name.trim().take(MAX_CHILD_NAME)))
+    }
+
     fun setUninstallProtection(enabled: Boolean) {
         saveSettings((_settings.value ?: DeviceSettings()).copy(uninstallProtection = enabled))
     }
@@ -168,6 +178,8 @@ class ParentViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     companion object {
+        const val MAX_CHILD_NAME = 30
+
         fun todayKey(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
     }
 }

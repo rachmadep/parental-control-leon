@@ -23,11 +23,11 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.firebase.auth.FirebaseAuth
-import com.parentalcontrol.parent.ParentApp
 import com.parentalcontrol.parent.R
 import com.parentalcontrol.parent.analysis.PinChange
 import com.parentalcontrol.parent.analysis.RelativeTime
 import com.parentalcontrol.parent.databinding.DialogChangePinBinding
+import com.parentalcontrol.parent.databinding.DialogChildNameBinding
 import com.parentalcontrol.parent.databinding.FragmentSettingsBinding
 
 class SettingsFragment : Fragment() {
@@ -60,7 +60,9 @@ class SettingsFragment : Fragment() {
         setupLocalPreferences()
         setupDeviceSettings()
 
-        binding.tvSettingsDevice.text = "Device ID: ${ParentApp.TARGET_DEVICE_ID}"
+        val uid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+        binding.tvSettingsDevice.text = "ID akun: ${uid.take(8)}…"
+        binding.btnChildName.setOnClickListener { showChildNameDialog() }
         @Suppress("DEPRECATION")
         val versionName = requireContext().packageManager
             .getPackageInfo(requireContext().packageName, 0).versionName
@@ -72,7 +74,7 @@ class SettingsFragment : Fragment() {
         binding.btnSignOut.setOnClickListener {
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle("Keluar dari akun?")
-                .setMessage("Anda harus masuk lagi untuk memantau dan mengontrol tablet Leon. Tablet tetap menegakkan batas waktu.")
+                .setMessage("Anda harus masuk lagi untuk memantau dan mengontrol tablet anak. Tablet tetap menegakkan batas waktu.")
                 .setPositiveButton("Keluar") { _, _ ->
                     // MainActivity mengamati sesi dan otomatis kembali ke layar login
                     FirebaseAuth.getInstance().signOut()
@@ -181,6 +183,9 @@ class SettingsFragment : Fragment() {
 
     private fun renderSettings() {
         val settings = viewModel.settings.value ?: return
+        val name = settings.childName.trim()
+        binding.tvProfileName.text = if (name.isEmpty()) "Tablet Anak" else "Tablet $name"
+        binding.btnChildName.text = if (name.isEmpty()) "Atur nama anak" else "Ubah nama anak"
         setSwitch(binding.switchLocation, settings.locationEnabled)
         setSwitch(binding.switchUninstall, settings.uninstallProtection)
         renderLocation()
@@ -208,12 +213,24 @@ class SettingsFragment : Fragment() {
 
     private fun openMaps() {
         val loc = viewModel.location.value ?: return
-        val geo = Uri.parse("geo:${loc.lat},${loc.lng}?q=${loc.lat},${loc.lng}(Tablet Leon)")
+        val geo = Uri.parse("geo:${loc.lat},${loc.lng}?q=${loc.lat},${loc.lng}(Tablet Anak)")
         try {
             startActivity(Intent(Intent.ACTION_VIEW, geo))
         } catch (e: ActivityNotFoundException) {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://maps.google.com/?q=${loc.lat},${loc.lng}")))
         }
+    }
+
+    private fun showChildNameDialog() {
+        val dialogBinding = DialogChildNameBinding.inflate(layoutInflater)
+        dialogBinding.etChildName.setText(viewModel.settings.value?.childName.orEmpty())
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Nama Anak")
+            .setView(dialogBinding.root)
+            .setPositiveButton("Simpan") { _, _ -> viewModel.setChildName(dialogBinding.etChildName.text.toString()) }
+            .setNegativeButton("Batal", null)
+            .show()
     }
 
     private fun showChangePinDialog() {

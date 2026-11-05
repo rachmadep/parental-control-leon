@@ -21,6 +21,7 @@ import java.util.UUID
 
 class BleServerManager(
     private val context: Context,
+    private val familyTag: ByteArray?,
     private val onCommandReceived: (commandType: Int, param: Int) -> Unit
 ) {
     private val tag = "BleServerManager"
@@ -95,7 +96,7 @@ class BleServerManager(
         service.addCharacteristic(commandChar)
         gattServer?.addService(service)
 
-        // Mulai BLE Advertising agar HP Orang Tua bisa mendeteksi tablet Leon
+        // Mulai BLE Advertising agar HP Orang Tua bisa mendeteksi tablet anak
         advertiser = bluetoothAdapter?.bluetoothLeAdvertiser
         if (advertiser != null) {
             val settings = AdvertiseSettings.Builder()
@@ -105,9 +106,15 @@ class BleServerManager(
                 .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
                 .build()
 
+            // Penanda keluarga di service data: HP orang tua hanya menyambung ke tablet dengan penanda yang cocok
             val data = AdvertiseData.Builder()
                 .setIncludeDeviceName(false)
                 .addServiceUuid(ParcelUuid(serviceUuid))
+                .apply {
+                    familyTag?.let {
+                        addServiceData(ParcelUuid(UUID.fromString(ChildApp.BLE_FAMILY_TAG_UUID)), it)
+                    }
+                }
                 .build()
 
             advertiser?.startAdvertising(settings, data, advertiseCallback)

@@ -11,14 +11,15 @@ import android.os.Bundle
 import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 
 /**
- * Mengirim lokasi tablet ke `devices/{id}/location` tiap beberapa menit selama fitur Lokasi diaktifkan
+ * Mengirim lokasi tablet ke `devices/{UID}/location` tiap beberapa menit selama fitur Lokasi diaktifkan
  * orang tua. Memakai LocationManager (tanpa Google Play Services). Akses dari service latar belakang
  * butuh izin lokasi "sepanjang waktu" (ACCESS_BACKGROUND_LOCATION) pada Android 10+.
  */
-class LocationReporter(private val context: Context, private val deviceId: String) {
+class LocationReporter(private val context: Context) {
 
     private val tag = "LocationReporter"
     private val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
@@ -77,7 +78,9 @@ class LocationReporter(private val context: Context, private val deviceId: Strin
     }
 
     private fun report(location: Location) {
-        FirebaseDatabase.getInstance().getReference("devices").child(deviceId).child("location").setValue(
+        // Tanpa akun masuk penulisan pasti ditolak aturan database
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        FirebaseDatabase.getInstance().getReference("devices").child(uid).child("location").setValue(
             mapOf(
                 "lat" to location.latitude,
                 "lng" to location.longitude,

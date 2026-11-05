@@ -61,6 +61,10 @@ class DashboardFragment : Fragment() {
             renderYoutubeLimit()
         }
         viewModel.config.observe(viewLifecycleOwner) { renderYoutubeLimit() }
+        viewModel.settings.observe(viewLifecycleOwner) { settings ->
+            val name = settings.childName.trim()
+            binding.tvDashboardTitle.text = if (name.isEmpty()) getString(R.string.title_dashboard) else "Kontrol Tablet $name"
+        }
         viewModel.bleConnected.observe(viewLifecycleOwner) { renderStatus() }
         viewModel.bleStatus.observe(viewLifecycleOwner) { binding.btnConnectBle.text = it }
     }
@@ -84,7 +88,7 @@ class DashboardFragment : Fragment() {
         }
         binding.btnShowOverlay.setOnClickListener {
             viewModel.dispatchCommand("SHOW_OVERLAY", bleCode = BleClientManager.CMD_SHOW_OVERLAY)
-            toast("Menampilkan layar istirahat di tablet Leon...")
+            toast("Menampilkan layar istirahat di tablet anak...")
         }
 
         binding.sliderVolume.addOnChangeListener { _, value, fromUser ->

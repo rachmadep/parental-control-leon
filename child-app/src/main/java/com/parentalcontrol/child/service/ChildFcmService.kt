@@ -12,15 +12,13 @@ class ChildFcmService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        Log.i(tag, "FCM Token baru tablet Leon: $token")
+        Log.i(tag, "FCM Token baru tablet anak: $token")
         
         // Langsung update ke Firebase agar tidak perlu startService yang bisa crash jika izin belum lengkap
         // Database dilindungi aturan auth: tanpa akun masuk penulisan pasti ditolak
-        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) return
-
-        val deviceId = "leon_tablet" // Hardcode agar sinkron dengan Parent App
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
         com.google.firebase.database.FirebaseDatabase.getInstance()
-            .getReference("devices").child(deviceId).child("fcmToken").setValue(token)
+            .getReference("devices").child(uid).child("fcmToken").setValue(token)
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {

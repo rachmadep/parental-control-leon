@@ -1,9 +1,9 @@
-# Parental Control untuk Leon (Android Pair App)
+# Parental Control (Android Pair App)
 
-Sepasang aplikasi Android (Native Kotlin) yang dirancang untuk memantau dan mengontrol aktivitas tablet anak (**Leon**), khususnya penggunaan **YouTube Kids**.
+Sepasang aplikasi Android (Native Kotlin) yang dirancang untuk memantau dan mengontrol aktivitas tablet anak, khususnya penggunaan **YouTube Kids**. Dibuat awalnya untuk tablet anak bernama Leon; nama anak bisa diatur di aplikasi, dan **satu proyek Firebase bisa dipakai banyak keluarga** (lihat bagian di bawah).
 
 Aplikasi ini terdiri dari dua modul:
-1. **`child-app`**: Dipasang di tablet Android Leon. Berjalan sebagai *foreground service* yang memantau durasi aplikasi, **menegakkan batas waktu sendiri (tetap jalan saat offline)**, mengunci layar, mengatur volume/brightness, melaporkan lokasi (opsional), dan menyediakan server Bluetooth (BLE) saat Wi-Fi dimatikan.
+1. **`child-app`**: Dipasang di tablet Android anak. Berjalan sebagai *foreground service* yang memantau durasi aplikasi, **menegakkan batas waktu sendiri (tetap jalan saat offline)**, mengunci layar, mengatur volume/brightness, melaporkan lokasi (opsional), dan menyediakan server Bluetooth (BLE) saat Wi-Fi dimatikan.
 2. **`parent-app`**: Dipasang di HP orang tua. Berfungsi sebagai dashboard pemantau, riwayat penggunaan, pengatur batas waktu dan jadwal, serta remote kontrol (lock screen, volume, kecerahan, dan koneksi Bluetooth darurat).
 
 ---
@@ -33,7 +33,7 @@ Aplikasi ini terdiri dari dua modul:
 - 🔊 **Volume & kecerahan** tablet lewat slider dari HP orang tua.
 - 🔒 **Lock screen ganda**:
   - **System Lock**: `DevicePolicyManager.lockNow()` mengunci dan mematikan layar.
-  - **Layar Istirahat**: overlay layar penuh ramah anak ("Waktunya Istirahat, Leon! 🌟") dengan alasan penguncian dan verifikasi **PIN Orang Tua** untuk membuka manual.
+  - **Layar Istirahat**: overlay layar penuh ramah anak ("Waktunya Istirahat, <nama anak>! 🌟") dengan alasan penguncian dan verifikasi **PIN Orang Tua** untuk membuka manual.
 
 ### Aktivitas & Riwayat
 - 📊 Total waktu layar untuk **Hari Ini / 7 Hari / 30 Hari** dengan grafik batang per hari.
@@ -56,14 +56,16 @@ Semua aturan **ditegakkan langsung di tablet** dan disimpan lokal, sehingga teta
 - 📍 **Lokasi tablet** (opsional): dilaporkan tiap ~10 menit, dengan tombol **Buka di Maps**.
 - 🛡️ **Proteksi uninstall**: peringatan ke orang tua jika Device Admin tablet dimatikan.
 - 📱 **Profil perangkat**: model tablet, versi Android, baterai, dan status koneksi.
-- 🔐 **Akun keluarga**: aplikasi meminta masuk dengan akun Firebase (email/password) sebelum menampilkan apa pun; tombol **Keluar** ada di Pengaturan.
+- 🔐 **Akun keluarga**: daftar atau masuk dengan email/password (ada "Lupa password"), sebelum aplikasi menampilkan apa pun; tombol **Keluar** ada di Pengaturan. Data tiap akun terpisah.
+- 👶 **Nama anak**: diatur di Pengaturan, dipakai di judul dashboard dan layar istirahat tablet.
 - 🌗 **Mode gelap**.
 
 ### ⚠️ Batasan yang perlu diketahui
 - **Proteksi uninstall tidak memblokir penghapusan aplikasi.** Ia hanya memberi peringatan saat Device Admin dimatikan. Pemblokiran sungguhan butuh *Device Owner*, yang harus diatur saat tablet di-reset pabrik.
 - **Notifikasi bukan push.** Notifikasi hanya muncul selama aplikasi orang tua masih berjalan di latar belakang.
 - **SafeSearch dan filter web belum tersedia.** Fitur itu butuh VPN lokal atau Accessibility Service.
-- **Keamanan Firebase.** Database hanya aman jika aturan di `database.rules.json` sudah Anda terapkan (lihat langkah setup). Tanpa itu, siapa pun yang tahu alamat database bisa membaca dan mengubah data. Kedua aplikasi berbagi **satu akun keluarga**, jadi yang memegang sesi di tablet (mis. lewat root/ADB) memegang akses penuh. PIN 4 digit yang di-hash tetap bisa ditebak oleh pemegang akun.
+- **Keamanan Firebase.** Data tiap keluarga hanya bisa dibaca akunnya sendiri **jika aturan di `database.rules.json` sudah Anda terapkan** (lihat langkah setup); tanpa itu database terbuka untuk siapa pun yang tahu alamatnya. Dalam satu keluarga, HP dan tablet berbagi satu akun, jadi yang memegang sesi di tablet (mis. lewat root/ADB) memegang akses penuh. PIN 4 digit yang di-hash tetap bisa ditebak oleh pemegang akun.
+- **Bluetooth (BLE) belum memakai autentikasi.** Penanda keluarga hanya mencegah HP menyambung ke tablet yang salah saat banyak pasangan berdekatan; siapa pun dalam jangkauan (~10 m) yang memodifikasi aplikasinya masih bisa mengirim perintah ke tablet.
 - **Kontrol Wi-Fi** dari jarak jauh hanya berfungsi di Android 9 ke bawah.
 - **Layar istirahat tidak menahan layar menyala.** Layar mengikuti timeout bawaan tablet dan mati sendiri; penegakan batas waktu tidak membangunkannya. Saat layar dinyalakan lagi, tablet langsung diperiksa dan layar istirahat muncul kembali bila batas masih berlaku. Jika anak menekan Home, layar istirahat dimunculkan lagi dalam hitungan detik.
 - Beberapa merek (mis. HONOR, Xiaomi) mematikan service latar belakang lewat optimasi baterai. Nonaktifkan optimasi baterai untuk aplikasi child di tablet.
@@ -74,7 +76,7 @@ Semua aturan **ditegakkan langsung di tablet** dan disimpan lokal, sehingga teta
 
 ```
 parental-control/
-├── child-app/                       # Modul Tablet Leon
+├── child-app/                       # Modul Tablet Anak
 │   ├── src/main/
 │   │   ├── AndroidManifest.xml      # Izin UsageStats, DeviceAdmin, Overlay, BLE, Lokasi + <queries>
 │   │   ├── res/                     # UI Setup Checklist & Lock Overlay
@@ -107,7 +109,7 @@ parental-control/
 
 ## 🗄️ Struktur Data Firebase
 
-Semua data berada di `devices/leon_tablet`. Kedua aplikasi memegang kontrak yang sama secara terpisah, jadi ubah keduanya bersamaan.
+Semua data satu keluarga berada di `devices/{UID akun keluarga}`. Kedua aplikasi memegang kontrak yang sama secara terpisah, jadi ubah keduanya bersamaan.
 
 | Node | Penulis | Isi |
 |---|---|---|
@@ -116,7 +118,7 @@ Semua data berada di `devices/leon_tablet`. Kedua aplikasi memegang kontrak yang
 | `isOnline`, `lastHeartbeat` | tablet | Status koneksi |
 | `pendingCommand` | HP orang tua | Perintah instan (kunci, volume, kecerahan, dll.), dihapus tablet setelah dijalankan |
 | `config` | HP orang tua | Batas harian, aturan per aplikasi, jam tidur, waktu belajar (satu string JSON) |
-| `settings` | HP orang tua | Lokasi aktif/tidak dan proteksi uninstall (satu string JSON) |
+| `settings` | HP orang tua | Nama anak, lokasi aktif/tidak, dan proteksi uninstall (satu string JSON) |
 | `pin` | HP orang tua | Salt dan hash PIN orang tua |
 | `location` | tablet | Lokasi terakhir (hanya jika fitur lokasi aktif) |
 | `lastAlert` | tablet | Peringatan terakhir (batas tercapai / Device Admin dimatikan) |
@@ -145,20 +147,20 @@ Jika Gradle melaporkan tidak ada Java Runtime, arahkan `JAVA_HOME` ke JDK bawaan
 
    File `google-services.json` tidak ikut di-commit (ada di `.gitignore`), tetapi build gagal tanpanya.
 3. Aktifkan **Realtime Database** (buat database, lokasi bebas).
-4. **Amankan database dengan akun keluarga.** Kedua aplikasi masuk dengan satu akun yang sama:
-   1. **Authentication → Sign-in method** → aktifkan **Email/Password**.
-   2. **Authentication → Users → Add user**: buat satu akun (email + password yang kuat), lalu salin **User UID**-nya.
-   3. Buka [database.rules.json](database.rules.json), ganti **kedua** `GANTI_DENGAN_UID_AKUN_KELUARGA` dengan UID tadi.
-   4. **Realtime Database → Rules**: tempel isi file itu, lalu **Publish**.
+4. **Aktifkan login dan terapkan aturan database.** Kedua aplikasi memakai akun Firebase, dan satu aturan yang sama cukup untuk berapa pun keluarga (tidak perlu menyunting aturan lagi untuk tiap keluarga baru):
+   1. **Authentication → Sign-in method** → aktifkan **Email/Password** (jangan aktifkan *Email link*).
+   2. **Realtime Database → Rules**: tempel seluruh isi [database.rules.json](database.rules.json) apa adanya, lalu **Publish**.
 
-   > **Urutan penting saat memperbarui instalasi lama:** buat akun (langkah 1-2) dan pasang versi aplikasi terbaru di tablet dan HP, masuk di keduanya, **baru** terapkan aturan (langkah 3-4). Versi lama tidak bisa masuk dan akan berhenti bekerja begitu aturan baru aktif.
+   Akun tidak perlu dibuat manual: pengguna mendaftar sendiri lewat tombol **Daftar** di aplikasi orang tua.
+
+   > **Saat memperbarui instalasi lama:** pasang versi terbaru di tablet dan HP, daftar di HP orang tua, masuk dengan akun itu di tablet, **baru** terapkan aturan. Versi lama tidak bisa masuk dan berhenti bekerja begitu aturan baru aktif. Data lama di `devices/leon_tablet` tidak terpakai lagi (aturan baru juga menutupnya); hapus lewat Firebase Console jika ingin.
    >
-   > Mengatur ulang aturan menjadi terbuka (`".read": true, ".write": true`) hanya untuk uji coba singkat; jangan dipakai sungguhan.
+   > Aturan terbuka (`".read": true, ".write": true`) hanya untuk uji coba singkat; jangan dipakai sungguhan.
 
-### 3. Instalasi di Tablet Leon (`child-app`)
+### 3. Instalasi di Tablet Anak (`child-app`)
 1. Pilih konfigurasi run `child-app` di Android Studio dan install ke tablet.
-2. Buka aplikasi **Leon Parental (Child)** di tablet.
-3. Di kartu **Akun Keluarga**, masuk dengan email dan password akun tadi (wajib). Tablet tidak punya tombol keluar, agar anak tidak bisa memutus sesi.
+2. Buka aplikasi **Parental Control (Anak)** di tablet.
+3. Di kartu **Akun Keluarga**, masuk dengan akun keluarga (wajib). Akunnya dibuat di HP orang tua lewat tombol **Daftar** (langkah 4 di bawah), jadi buat akun itu lebih dulu. Tablet tidak punya tombol keluar, agar anak tidak bisa memutus sesi.
 4. Ikuti **Checklist Izin** pada layar:
    - ✅ **Akses Penggunaan**: Izinkan akses data penggunaan agar aplikasi bisa membaca durasi YouTube Kids.
    - ✅ **Device Administrator**: Aktifkan agar HP orang tua bisa mengunci layar tablet.
@@ -170,14 +172,33 @@ Jika Gradle melaporkan tidak ada Java Runtime, arahkan `JAVA_HOME` ke JDK bawaan
 
 ### 4. Instalasi di HP Orang Tua (`parent-app`)
 1. Pilih konfigurasi run `parent-app` dan install ke HP Anda.
-2. Buka aplikasi **Leon Parental (Parent)** dan masuk dengan akun keluarga yang sama. Setelah itu navigasi bawah berisi empat tab:
+2. Buka aplikasi **Parental Control (Orang Tua)**. Pertama kali, pilih **Daftar** untuk membuat akun keluarga (email + password); tablet nanti masuk dengan akun yang sama. Setelah itu navigasi bawah berisi empat tab:
    - **Dashboard**: status tablet (**Online** via Firebase), durasi YouTube Kids, tombol **Kunci Layar Sekarang**, **Buka Kunci**, serta slider Volume dan Kecerahan.
    - **Aktivitas**: riwayat dan analisis pemakaian.
    - **Batas Waktu**: atur batas harian, jadwal, dan batas per aplikasi.
    - **Pengaturan**: ganti PIN (disarankan, PIN bawaan `1234`), kunci biometrik, notifikasi, lokasi, dan proteksi.
 3. **Uji Coba Saat Wi-Fi Tablet Mati:**
-   - Matikan Wi-Fi pada tablet Leon.
+   - Matikan Wi-Fi pada tablet anak.
    - Di tab Dashboard HP Orang Tua, klik tombol **"Hubungkan via Bluetooth (Offline)"**.
-   - HP Anda akan mencari tablet Leon via BLE dan terhubung secara lokal.
+   - HP Anda akan mencari tablet keluarga Anda via BLE dan terhubung secara lokal.
    - Anda tetap bisa menekan tombol **Kunci Layar** atau mengatur **Volume/Brightness** meski tanpa internet!
    - Pengaturan batas waktu tetap ditegakkan tablet meski offline, karena disimpan lokal di tablet.
+
+---
+
+## 👨‍👩‍👧 Dipakai Beberapa Keluarga (1 Proyek Firebase)
+
+Cocok untuk dibagikan ke teman. Cara kerjanya: tiap keluarga mendaftar akunnya sendiri, dan datanya disimpan di `devices/{UID akun}`. Aturan database hanya mengizinkan akun itu membaca dan menulis node-nya, sehingga keluarga lain tidak bisa melihat atau mengubahnya.
+
+**Untuk teman Anda:**
+1. Pasang **dua** aplikasi: *Parental Control (Orang Tua)* di HP orang tua dan *Parental Control (Anak)* di tablet anak.
+2. Di HP orang tua, pilih **Daftar** dan buat akun (email + password; gunakan email yang bisa diakses untuk reset password).
+3. Di tablet anak, masuk dengan akun yang sama, lengkapi checklist izin, lalu **Mulai Layanan Proteksi**.
+4. Di HP orang tua: **Pengaturan → Atur nama anak**, ganti PIN bawaan `1234`, dan atur batas waktu.
+
+**Untuk Anda sebagai pemilik proyek Firebase:**
+- **Privasi:** sebagai pemilik, Anda bisa melihat semua data semua keluarga di Firebase Console (pemakaian aplikasi anak, lokasi jika diaktifkan). Beri tahu teman Anda dan jangan membukanya tanpa izin mereka.
+- **Kuota paket gratis (Spark):** maksimal 100 koneksi bersamaan (tiap keluarga memakai sekitar 2), 1 GB penyimpanan, dan 10 GB unduhan per bulan. Lebih dari cukup untuk 5 keluarga.
+- **Batasi pendaftaran:** setelah semua teman mendaftar, matikan pendaftaran baru di **Authentication → Settings → User actions → Enable create (sign-up)** agar orang lain yang mendapat APK tidak bisa membuat akun di proyek Anda. Akun yang sudah ada tetap bisa masuk.
+- **Membagikan aplikasi:** APK debug (`./gradlew :child-app:assembleDebug :parent-app:assembleDebug`) bisa dikirim langsung; penerima perlu mengizinkan pemasangan dari sumber tidak dikenal. Untuk distribusi yang lebih rapi, pakai Firebase App Distribution.
+- **Bluetooth:** tiap tablet mengiklankan penanda keluarganya, sehingga HP orang tua hanya menyambung ke tablet yang cocok meski banyak pasangan berdekatan.

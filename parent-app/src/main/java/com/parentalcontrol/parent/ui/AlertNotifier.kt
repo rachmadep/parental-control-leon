@@ -25,7 +25,7 @@ object AlertNotifier {
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val channel = NotificationChannel(CHANNEL_ID, "Peringatan Tablet Leon", NotificationManager.IMPORTANCE_HIGH).apply {
+        val channel = NotificationChannel(CHANNEL_ID, "Peringatan Tablet Anak", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Batas waktu tercapai dan perubahan proteksi di tablet"
         }
         context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
@@ -39,9 +39,9 @@ object AlertNotifier {
         ) return
 
         val title = when (alert.type) {
-            AlertTypes.LIMIT_REACHED -> "Batas waktu Leon tercapai"
+            AlertTypes.LIMIT_REACHED -> "Batas waktu tercapai"
             AlertTypes.ADMIN_DISABLED -> "Proteksi tablet dimatikan"
-            else -> "Peringatan tablet Leon"
+            else -> "Peringatan tablet anak"
         }
         val openApp = PendingIntent.getActivity(
             context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE

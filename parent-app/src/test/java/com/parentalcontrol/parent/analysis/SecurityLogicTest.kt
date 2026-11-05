@@ -31,6 +31,16 @@ class SecurityLogicTest {
         assertEquals("35c56314f89066056408d6d269daf9e69217b9953215f286eec86cec3076271a", PinHasher.hash("1234", "salt"))
     }
 
+    // --- BleFamilyTag (harus sama dengan child-app) ---
+
+    @Test
+    fun `family tag matches known value shared with child-app`() {
+        val tag = BleFamilyTag.of("uid-test")
+        assertEquals(4, tag.size)
+        // Kontrak dengan child-app (BleFamilyTagTest memeriksa nilai yang sama): SHA-256("uid-test")[0..4]
+        assertEquals("62a5cbb7", tag.joinToString("") { "%02x".format(it) })
+    }
+
     // --- PinChange ---
 
     @Test
