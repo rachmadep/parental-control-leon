@@ -28,6 +28,8 @@ Gradle wrapper, two modules (`:child-app`, `:parent-app`), compileSdk/targetSdk 
 
 Tests cover only pure-Kotlin logic (no Android classes); there are no instrumented tests and no lint config. If Gradle reports no Java runtime, point `JAVA_HOME` at Android Studio's bundled JBR (`/Applications/Android Studio.app/Contents/jbr/Contents/Home` on macOS).
 
+**Release APKs:** `./gradlew :child-app:assembleRelease :parent-app:assembleRelease`. Signing reads `keystore.properties` at the repo root (gitignored; `storeFile` is an absolute path to a keystore kept *outside* the repo, e.g. `~/.android/parental-control-release.jks`); without it the output is `*-release-unsigned.apk`, which cannot be installed. R8 stays off on purpose (Gson/Firebase map field names by reflection; enabling it needs keep rules verified on a device). `lint { checkReleaseBuilds = false }` is set because `lintVitalAnalyzeRelease` crashes on JDK 25 with AGP 8.4.1 — remove it once AGP is upgraded. Bump `versionCode`/`versionName` in both modules per release. `dist/` (gitignored) holds the renamed APKs and `SHA256SUMS.txt` for GitHub Releases. Losing the keystore means installed apps can no longer be updated in place.
+
 **Build prerequisite:** both modules apply the `google-services` plugin, so each needs its own `google-services.json` (`child-app/` for package `com.parentalcontrol.child`, `parent-app/` for `com.parentalcontrol.parent`). The files are gitignored; the build fails without them. `local.properties` (SDK path) is also gitignored.
 
 BLE can't be tested on an emulator; verifying the offline path needs two physical devices.

@@ -186,19 +186,40 @@ Jika Gradle melaporkan tidak ada Java Runtime, arahkan `JAVA_HOME` ke JDK bawaan
 
 ---
 
+## 📦 Build Rilis (APK Siap Bagikan)
+
+APK rilis harus ditandatangani. Buat keystore sekali (simpan di luar repositori dan **cadangkan**; jika hilang, aplikasi tidak bisa diperbarui di atas versi yang sudah terpasang):
+
+```bash
+keytool -genkeypair -keystore ~/.android/parental-control-release.jks -storetype PKCS12 \
+  -alias parental-control -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Parental Control"
+```
+
+Lalu buat berkas `keystore.properties` di root proyek (sudah di-gitignore, jangan di-commit):
+
+```properties
+storeFile=/Users/anda/.android/parental-control-release.jks
+storePassword=...
+keyAlias=parental-control
+keyPassword=...
+```
+
+```bash
+./gradlew :child-app:assembleRelease :parent-app:assembleRelease
+# hasil: child-app/build/outputs/apk/release/child-app-release.apk
+#        parent-app/build/outputs/apk/release/parent-app-release.apk
+```
+
+Tanpa `keystore.properties`, hasilnya `*-release-unsigned.apk` yang tidak bisa dipasang. Naikkan `versionCode` dan `versionName` di `child-app/build.gradle.kts` dan `parent-app/build.gradle.kts` untuk setiap rilis baru. Pengecekan lint khusus build rilis dimatikan karena crash di JDK 25 dengan AGP 8.4.1.
+
+---
+
 ## 👨‍👩‍👧 Dipakai Beberapa Keluarga (1 Proyek Firebase)
 
 Cocok untuk dibagikan ke teman. Cara kerjanya: tiap keluarga mendaftar akunnya sendiri, dan datanya disimpan di `devices/{UID akun}`. Aturan database hanya mengizinkan akun itu membaca dan menulis node-nya, sehingga keluarga lain tidak bisa melihat atau mengubahnya.
 
 **Untuk teman Anda:**
-1. Pasang **dua** aplikasi: *Parental Control (Orang Tua)* di HP orang tua dan *Parental Control (Anak)* di tablet anak.
+1. Unduh dua APK dari halaman **Releases** repositori ini, lalu pasang **dua** aplikasi (izinkan pemasangan dari sumber tidak dikenal): *Parental Control (Orang Tua)* di HP orang tua dan *Parental Control (Anak)* di tablet anak.
 2. Di HP orang tua, pilih **Daftar** dan buat akun (email + password; gunakan email yang bisa diakses untuk reset password).
 3. Di tablet anak, masuk dengan akun yang sama, lengkapi checklist izin, lalu **Mulai Layanan Proteksi**.
 4. Di HP orang tua: **Pengaturan → Atur nama anak**, ganti PIN bawaan `1234`, dan atur batas waktu.
-
-**Untuk Anda sebagai pemilik proyek Firebase:**
-- **Privasi:** sebagai pemilik, Anda bisa melihat semua data semua keluarga di Firebase Console (pemakaian aplikasi anak, lokasi jika diaktifkan). Beri tahu teman Anda dan jangan membukanya tanpa izin mereka.
-- **Kuota paket gratis (Spark):** maksimal 100 koneksi bersamaan (tiap keluarga memakai sekitar 2), 1 GB penyimpanan, dan 10 GB unduhan per bulan. Lebih dari cukup untuk 5 keluarga.
-- **Batasi pendaftaran:** setelah semua teman mendaftar, matikan pendaftaran baru di **Authentication → Settings → User actions → Enable create (sign-up)** agar orang lain yang mendapat APK tidak bisa membuat akun di proyek Anda. Akun yang sudah ada tetap bisa masuk.
-- **Membagikan aplikasi:** APK debug (`./gradlew :child-app:assembleDebug :parent-app:assembleDebug`) bisa dikirim langsung; penerima perlu mengizinkan pemasangan dari sumber tidak dikenal. Untuk distribusi yang lebih rapi, pakai Firebase App Distribution.
-- **Bluetooth:** tiap tablet mengiklankan penanda keluarganya, sehingga HP orang tua hanya menyambung ke tablet yang cocok meski banyak pasangan berdekatan.
