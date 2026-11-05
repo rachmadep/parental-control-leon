@@ -49,12 +49,15 @@ class MainActivity : AppCompatActivity() {
         )
 
         super.onCreate(savedInstanceState)
+        DemoMode.init(this, intent)
         // Database hanya bisa diakses akun keluarga: tanpa sesi, jangan sentuh ViewModel (listener Firebase)
-        if (auth.currentUser == null) {
-            goToLogin()
-            return
+        if (!DemoMode.enabled) {
+            if (auth.currentUser == null) {
+                goToLogin()
+                return
+            }
+            auth.addAuthStateListener(authListener)
         }
-        auth.addAuthStateListener(authListener)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)

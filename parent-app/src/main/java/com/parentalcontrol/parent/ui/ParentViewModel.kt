@@ -12,6 +12,7 @@ import com.parentalcontrol.parent.analysis.AlertTracker
 import com.parentalcontrol.parent.analysis.BleFamilyTag
 import com.parentalcontrol.parent.analysis.PinChange
 import com.parentalcontrol.parent.analysis.PinHasher
+import com.parentalcontrol.parent.demo.DemoData
 import com.parentalcontrol.parent.firebase.FirebaseSyncManager
 import com.parentalcontrol.parent.model.DayHistory
 import com.parentalcontrol.parent.model.DeviceAlert
@@ -66,12 +67,18 @@ class ParentViewModel(application: Application) : AndroidViewModel(application) 
     /** Pesan singkat untuk Toast; dikumpulkan oleh MainActivity. */
     val messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
 
+    // Mode demo (hanya build debug, lihat DemoMode): data contoh lokal, tanpa Firebase dan tanpa akun
+    private val demo = DemoMode.enabled
+
     // Data keluarga ini ada di devices/{UID akun}. MainActivity memastikan sudah masuk sebelum ViewModel dibuat.
-    private val familyUid: String = requireNotNull(FirebaseAuth.getInstance().currentUser?.uid) {
+    private val familyUid: String = if (demo) "demo" else requireNotNull(FirebaseAuth.getInstance().currentUser?.uid) {
         "ParentViewModel dibuat sebelum masuk ke akun keluarga"
     }
 
-    private val firebase = FirebaseSyncManager(
+    // Lazy: di mode demo Firebase dan BLE tidak pernah disentuh
+    private val firebase by lazy { createFirebase() }
+
+    private fun createFirebase() = FirebaseSyncManager(
         deviceId = familyUid,
         onDeviceUpdated = { summary, isOnline -> _device.postValue(DeviceState(summary, isOnline)) },
         onHistoryUpdated = { _history.postValue(it) },
@@ -82,14 +89,35 @@ class ParentViewModel(application: Application) : AndroidViewModel(application) 
         onAlert = { handleAlert(it) }
     )
 
-    private val ble = BleClientManager(application, BleFamilyTag.of(familyUid)) { isConnected, statusText ->
-        _bleConnected.postValue(isConnected)
-        _bleStatus.postValue(statusText)
-        if (isConnected) messages.tryEmit("Berhasil terhubung ke tablet anak via Bluetooth!")
+    private val ble by lazy {
+        BleClientManager(application, BleFamilyTag.of(familyUid)) { isConnected, statusText ->
+            _bleConnected.postValue(isConnected)
+            _bleStatus.postValue(statusText)
+            if (isConnected) messages.tryEmit("Berhasil terhubung ke tablet anak via Bluetooth!")
+        }
     }
 
     init {
-        firebase.startListening()
+        if (demo) loadDemoData() else firebase.startListening()
+    }
+
+    private fun loadDemoData() {
+        _device.value = DeviceState(DemoData.summary(System.currentTimeMillis()), isOnline = true)
+        _history.value = DemoData.history(todayKey())
+        _config.value = DemoData.config()
+        _settings.value = DemoData.settings()
+    }
+
+    /** Perintah di mode demo hanya mengubah data lokal dan menampilkan pesan; tidak ada tablet sungguhan. */
+    private fun applyDemoCommand(action: String, param: Int) {
+        val state = _device.value ?: return
+        when (action) {
+            "SET_VOLUME" -> _device.value = state.copy(summary = state.summary.copy(currentVolumePercent = param))
+            "SET_BRIGHTNESS" -> _device.value = state.copy(summary = state.summary.copy(currentBrightnessPercent = param))
+            "LOCK_NOW" -> messages.tryEmit("Demo: layar tablet dikunci")
+            "SHOW_OVERLAY" -> messages.tryEmit("Demo: layar istirahat ditampilkan")
+            "HIDE_OVERLAY" -> messages.tryEmit("Demo: kunci dibuka")
+        }
     }
 
     /**
@@ -97,6 +125,10 @@ class ParentViewModel(application: Application) : AndroidViewModel(application) 
      * jika tidak, kirim lewat Firebase Online.
      */
     fun dispatchCommand(action: String, param: Int = 0, bleCode: Int) {
+        if (demo) {
+            applyDemoCommand(action, param)
+            return
+        }
         if (_bleConnected.value == true) {
             ble.sendCommand(bleCode, param)
         } else {
@@ -106,14 +138,19 @@ class ParentViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    val isBluetoothEnabled: Boolean get() = ble.isBluetoothEnabled
+    val isBluetoothEnabled: Boolean get() = !demo && ble.isBluetoothEnabled
 
-    fun startBleScan() = ble.startScanAndConnect()
+    fun startBleScan() {
+        if (demo) messages.tryEmit("Demo: Bluetooth tidak tersedia") else ble.startScanAndConnect()
+    }
 
-    fun disconnectBle() = ble.disconnect()
+    fun disconnectBle() {
+        if (!demo) ble.disconnect()
+    }
 
     fun saveConfig(newConfig: LimitsConfig) {
         _config.value = newConfig // optimistis; listener Firebase menimpa dengan nilai tersimpan
+        if (demo) return
         firebase.saveConfig(newConfig) { success, errorMsg ->
             if (!success) messages.tryEmit("Gagal menyimpan pengaturan: $errorMsg")
         }
@@ -142,6 +179,7 @@ class ParentViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun saveSettings(newSettings: DeviceSettings) {
         _settings.value = newSettings // optimistis; listener Firebase menimpa dengan nilai tersimpan
+        if (demo) return
         firebase.saveSettings(newSettings) { success, errorMsg ->
             if (!success) messages.tryEmit("Gagal menyimpan pengaturan: $errorMsg")
         }
@@ -153,6 +191,10 @@ class ParentViewModel(application: Application) : AndroidViewModel(application) 
      */
     fun changePin(old: String, new: String, confirm: String): String? {
         PinChange.validate(old, new, confirm, _pinCredential.value)?.let { return it }
+        if (demo) {
+            messages.tryEmit("Demo: PIN diperbarui (tidak disimpan)")
+            return null
+        }
 
         val salt = ByteArray(8).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
         firebase.savePin(PinCredential(salt, PinHasher.hash(new, salt))) { success, errorMsg ->
@@ -173,6 +215,7 @@ class ParentViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     override fun onCleared() {
+        if (demo) return
         firebase.stopListening()
         ble.disconnect()
     }

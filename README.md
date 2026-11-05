@@ -21,6 +21,12 @@ Aplikasi ini terdiri dari dua modul:
 
 > Tampilan mengikuti redesign di Google Stitch ("Parental Control App Redesign"). Mode gelap tersedia di tab Pengaturan.
 
+### 🎬 Demo (±19 detik)
+
+<p align="center"><img src="docs/demo/demo.gif" width="260" alt="Demo penggunaan aplikasi orang tua"></p>
+
+Rekaman emulator dengan **data contoh** (bukan data asli): Dashboard → geser volume → riwayat 7 hari → tambah +30 menit → Pengaturan. Versi MP4: [docs/demo/demo.mp4](docs/demo/demo.mp4).
+
 ---
 
 ## 🚀 Fitur Utama
@@ -136,6 +142,14 @@ Build dan test dari terminal:
 ./gradlew :child-app:assembleDebug :parent-app:assembleDebug
 ./gradlew :child-app:testDebugUnitTest :parent-app:testDebugUnitTest
 ```
+
+**Mode demo (khusus build debug):** untuk mencoba tampilan atau merekam demo tanpa akun Firebase dan tanpa tablet, buka aplikasi orang tua dengan data contoh lokal:
+
+```bash
+adb shell am start -n com.parentalcontrol.parent/.ui.MainActivity --ez demo true
+```
+
+Mode ini mengabaikan Firebase dan Bluetooth, dan build rilis menolaknya.
 
 Jika Gradle melaporkan tidak ada Java Runtime, arahkan `JAVA_HOME` ke JDK bawaan Android Studio (di macOS: `/Applications/Android Studio.app/Contents/jbr/Contents/Home`).
 

@@ -60,7 +60,7 @@ class SettingsFragment : Fragment() {
         setupLocalPreferences()
         setupDeviceSettings()
 
-        val uid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+        val uid = if (DemoMode.enabled) "demo" else FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
         binding.tvSettingsDevice.text = "ID akun: ${uid.take(8)}…"
         binding.btnChildName.setOnClickListener { showChildNameDialog() }
         @Suppress("DEPRECATION")
@@ -70,7 +70,8 @@ class SettingsFragment : Fragment() {
 
         binding.rowChangePin.setOnClickListener { showChangePinDialog() }
 
-        binding.tvAccountEmail.text = FirebaseAuth.getInstance().currentUser?.email ?: "-"
+        binding.tvAccountEmail.text =
+            if (DemoMode.enabled) "demo@contoh.com (mode demo)" else FirebaseAuth.getInstance().currentUser?.email ?: "-"
         binding.btnSignOut.setOnClickListener {
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle("Keluar dari akun?")
